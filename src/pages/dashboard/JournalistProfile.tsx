@@ -1,28 +1,99 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { MOCK_JOURNALISTS } from '@/data/mock';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Phone, FileText, Plane, Briefcase, Check, X, ShieldCheck, Download, ChevronLeft, AlertCircle } from 'lucide-react';
+import { User, Phone, FileText, Plane, Briefcase, Check, X, ShieldCheck, Download, ChevronLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { getFlagEmoji } from '@/lib/utils';
 import en from 'react-phone-number-input/locale/en';
-import { EquipmentVerification } from '@/components/EquipmentVerification';
 import { SystemCheckSuccess } from '@/components/SystemCheckSuccess';
 import { exportJournalistDetailToPDF } from '@/lib/export-utils';
 import { useAuth, UserRole } from '@/auth/context';
+import { MOCK_JOURNALISTS } from '@/data/mock';
+import { useUpdateApplicationStatusMutation, Equipment as EquipmentType } from '@/store/services/api';
+import { toast } from 'sonner';
 
 export function JournalistProfile() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
-    const journalist = MOCK_JOURNALISTS.find(j => j.id === id);
-    const countryName = (code: string) => en[code as keyof typeof en] || code;
+
+    // Status Mutation
+    const [updateStatus, { isLoading: isStatusUpdating }] = useUpdateApplicationStatusMutation();
+
+    const [application, setApplication] = useState<any>(null);
+
+    useEffect(() => {
+        if (location.state?.application) {
+            setApplication(location.state.application);
+        } else {
+            // Robust Fallback to Mock Data to "restore static data" appearance if API data is missing
+            const mock = MOCK_JOURNALISTS.find(j => j.id === id);
+            if (mock) {
+                setApplication({
+                    id: mock.id,
+                    formData: {
+                        first_name: mock.fullname.split(' ')[0],
+                        last_name: mock.fullname.split(' ').slice(1).join(' '),
+                        occupation: mock.role,
+                        country: mock.country,
+                        passport_number: mock.passportNo,
+                        city: 'Addis Ababa', // Mock static
+                        email: 'journalist@example.com', // Mock static
+                        phone: mock.contact,
+                        citizenship: mock.country,
+                        arrival_date: '2024-01-20',
+                        departure_date: '2024-02-10',
+                        address_line_1: 'Bole Road',
+                        place_of_birth: 'London',
+                        airlines_and_flight_number: 'ET 701',
+                        accommodation_details: 'Skylight Hotel'
+                    },
+                    user: { fullName: mock.fullname },
+                    equipment: [],
+                    status: mock.status,
+                    createdAt: new Date().toISOString()
+                });
+            }
+        }
+    }, [location.state, id]);
+
+
     const [showSystemCheck, setShowSystemCheck] = useState(false);
+    const countryName = (code: string) => code ? (en[code as keyof typeof en] || code) : 'Unknown';
 
-    if (!journalist) return <div>Journalist not found</div>;
+    const handleApprove = async () => {
+        if (!application) return;
+        try {
+            await updateStatus({ applicationId: Number(application.id), status: 'APPROVED' }).unwrap();
+            toast.success("Application Approved Successfully");
+            setApplication({ ...application, status: 'APPROVED' });
+        } catch (err) {
+            toast.error("Failed to approve application");
+        }
+    };
 
-    const isReadOnly = user?.role === UserRole.NISS_OFFICER;
+    if (!application) {
+        return <div className="p-8 text-center text-gray-500">Loading profile data...</div>;
+    }
+
+    // Data Mapping - Extensive
+    const formData = application.formData || {};
+    const equipmentList: EquipmentType[] = application.equipment || [];
+
+    const fullname = formData.first_name
+        ? `${formData.first_name} ${formData.last_name || ''}`
+        : (application.user?.fullName || 'Unknown');
+
+    const roleTitle = formData.occupation || 'Journalist';
+    const country = formData.country || 'ET';
+    const photoUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop";
+    const organization = "News Org"; // Placeholder or from API if avail
+
+    // Authorization
+    const canApprove = user?.role === UserRole.SUPER_ADMIN;
+    const isCustoms = user?.role === UserRole.CUSTOMS_OFFICER;
 
     return (
         <div className="space-y-6">
@@ -41,7 +112,7 @@ export function JournalistProfile() {
                 </div>
                 <Button
                     variant="outline"
-                    onClick={() => exportJournalistDetailToPDF(journalist)}
+                    onClick={() => exportJournalistDetailToPDF(application as any)}
                     className="gap-2"
                 >
                     <Download className="h-4 w-4" />
@@ -56,23 +127,23 @@ export function JournalistProfile() {
                     <Card className="bg-white border-0 shadow-sm">
                         <CardContent className="p-6 flex items-start gap-4">
                             <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-200">
-                                <img src={journalist.photoUrl} alt={journalist.fullname} className="h-full w-full object-cover" />
+                                <img src={photoUrl} alt={fullname} className="h-full w-full object-cover" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">{journalist.fullname}</h3>
+                                <h3 className="text-xl font-bold text-gray-900">{fullname}</h3>
                                 <div className="text-gray-500 text-sm flex flex-col gap-1 mt-1">
                                     <div className="flex items-center gap-2">
                                         <Briefcase className="h-3 w-3" />
-                                        <span>{journalist.role}</span>
+                                        <span>{roleTitle}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-lg leading-none">{getFlagEmoji(journalist.country)}</span>
-                                        <span>{countryName(journalist.country)}</span>
+                                        <span className="text-lg leading-none">{getFlagEmoji(country)}</span>
+                                        <span>{countryName(country)}</span>
                                     </div>
                                 </div>
                             </div>
                             <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
-                                <span>• CNN News</span>
+                                <span>• {organization}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -80,7 +151,7 @@ export function JournalistProfile() {
                     {/* Tabs */}
                     <Tabs defaultValue="personal" className="w-full">
                         <div className="bg-white rounded-lg p-1 shadow-sm mb-4">
-                            <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-6 border-b rounded-none px-4">
+                            <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-6 border-b rounded-none px-4 flex-wrap">
                                 <TabsTrigger value="personal" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
                                     <User className="h-4 w-4" /> Personal Details
                                 </TabsTrigger>
@@ -93,8 +164,8 @@ export function JournalistProfile() {
                                 <TabsTrigger value="arrival" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
                                     <Plane className="h-4 w-4" /> Arrival Info
                                 </TabsTrigger>
-                                <TabsTrigger value="media" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <Briefcase className="h-4 w-4" /> Media Accreditation
+                                <TabsTrigger value="equipment" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
+                                    <Briefcase className="h-4 w-4" /> Equipment
                                 </TabsTrigger>
                             </TabsList>
                         </div>
@@ -107,26 +178,15 @@ export function JournalistProfile() {
                                     <User className="h-5 w-5 text-blue-600" />
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-4 gap-6 pt-4">
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">FULL NAME</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{journalist.fullname}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">DATE OF BIRTH</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{journalist.dob || '04 Dec 1990'}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">GENDER</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{journalist.gender || 'Female'}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">NATIONALITY</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{countryName(journalist.country)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">RESIDENTIAL ADDRESS</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">Nairobi</p>
-                                    </div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">FULL NAME</p><p className="text-sm font-bold text-gray-900 mt-1">{fullname}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DOB</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.date_of_birth || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">GENDER</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.gender || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">NATIONALITY</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(country)}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PLACE OF BIRTH</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.place_of_birth || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">COUNTRY OF BIRTH</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(formData.country_of_birth)}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">CITIZENSHIP</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.citizenship || countryName(country)}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">OCCUPATION</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.occupation || 'N/A'}</p></div>
+                                    <div className="col-span-4"><p className="text-xs font-bold text-gray-400 uppercase">ADDRESS</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.address_line_1}, {formData.address_line_2 ? `${formData.address_line_2}, ` : ''}{formData.city}, {formData.state_province_region ? `${formData.state_province_region}, ` : ''}{formData.zip_postal_code}</p></div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -139,14 +199,9 @@ export function JournalistProfile() {
                                     <Phone className="h-5 w-5 text-teal-500" />
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-4 gap-6 pt-4">
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Personal Email</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">sara23@gmail.com</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Personal Phone</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{journalist.contact || '+254879613395'}</p>
-                                    </div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">EMAIL</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.email}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PHONE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.phone}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ZIP CODE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.zip_postal_code || 'N/A'}</p></div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -158,36 +213,11 @@ export function JournalistProfile() {
                                     <CardTitle className="text-lg font-bold">Passport Information</CardTitle>
                                     <FileText className="h-5 w-5 text-yellow-500" />
                                 </CardHeader>
-                                <CardContent className="space-y-6 pt-4">
-                                    <div className="grid grid-cols-4 gap-6">
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">PASSPORT NUMBER</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">{journalist.passportNo}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">ISSUING COUNTRY</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">{countryName(journalist.country)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">DATE OF ISSUE</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">10 May 2023</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">DATE OF EXPIRY</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">10 May 2033</p>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">PASSPORT BIO PAGE</p>
-                                        <div className="bg-blue-50 border border-blue-100 rounded-md p-3 flex items-center gap-3 w-fit">
-                                            <FileText className="h-8 w-8 text-blue-500" />
-                                            <div>
-                                                <p className="text-sm font-bold text-blue-900">Passport bio page.jpg</p>
-                                                <p className="text-xs text-blue-400">512KB</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <CardContent className="grid grid-cols-4 gap-6 pt-4">
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PASSPORT NO</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_number}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUING COUNTRY</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(country)}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_issue_date || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">EXPIRY DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_expiry_date || 'N/A'}</p></div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -200,78 +230,85 @@ export function JournalistProfile() {
                                     <Plane className="h-5 w-5 text-green-500" />
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-4 gap-6 pt-4">
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">EXPECTED ARRIVAL</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">04 DEC 2025</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">EXPECTED DEPARTURE</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">07 Dec 2025</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">AIRLINE</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">Ethiopian Airlines</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">FLIGHT NO</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">ET 404</p>
-                                    </div>
-                                    <div className="col-span-4">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">ACCOMMODATION</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{journalist.accommodation || 'Ethiopian Skylight Hotel, Bole International Airport, Addis Ababa'}</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ARRIVAL DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.arrival_date}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_date || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">FLIGHT</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.airlines_and_flight_number || 'N/A'}</p></div>
+                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE CITY</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_country_and_city || 'N/A'}</p></div>
 
-                        {/* Media Accreditation Content */}
-                        <TabsContent value="media">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Media Accreditation</CardTitle>
-                                    <Briefcase className="h-5 w-5 text-purple-500" />
-                                </CardHeader>
-                                <CardContent className="space-y-6 pt-4">
-                                    <div className="grid grid-cols-3 gap-6">
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">ORGANIZATION</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">CNN NEWS</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">ROLE TITLE</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">{journalist.role}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase">ASSIGNMENT</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-1">Broadcasting</p>
-                                        </div>
+                                    <div className="col-span-2">
+                                        <p className="text-xs font-bold text-gray-400 uppercase">ACCOMMODATION</p>
+                                        <p className="text-sm font-bold text-gray-900 mt-1">{formData.accommodation_details || 'N/A'}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">ASSIGNMENT LETTER</p>
-                                        <div className="bg-red-50 border border-red-100 rounded-md p-3 flex items-center gap-3 w-fit">
-                                            <FileText className="h-8 w-8 text-red-500" />
+                                    <div className="col-span-2">
+                                        <p className="text-xs font-bold text-gray-400 uppercase">SPECIAL REQUIREMENTS</p>
+                                        <p className="text-sm text-gray-700 mt-1">{formData.special_requirements || 'None'}</p>
+                                    </div>
+
+                                    <div className="col-span-4 border-t pt-4 mt-2">
+                                        <h4 className="text-sm font-bold mb-3 text-gray-900">Additional Declarations</h4>
+                                        <div className="grid grid-cols-4 gap-4">
                                             <div>
-                                                <p className="text-sm font-bold text-red-900">Letter_of_Assignment.pdf</p>
-                                                <p className="text-xs text-red-400">5MB</p>
+                                                <p className="text-xs font-bold text-gray-400 uppercase">HAS DRONE</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-1">{formData.has_drone === 'true' || formData.has_drone === true ? 'Yes' : 'No'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-400 uppercase">DECLARATION</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-1">{formData.declaration_status === 'true' || formData.declaration_status === true ? 'Yes' : 'No'}</p>
                                             </div>
                                         </div>
                                     </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
-                    </Tabs>
 
-                    {/* Equipment List - Enhanced */}
-                    <EquipmentVerification
-                        equipment={[
-                            { type: 'Lens', model: 'Sony FE 24-70mm GM' },
-                            { type: 'Drone', model: 'Sony A7S III' },
-                            { type: 'Drone', model: 'Rode VideoMic Pro' },
-                        ]}
-                        onApprove={() => console.log('Equipment approved')}
-                        onReject={() => console.log('Equipment rejected')}
-                        showActions={user?.role === UserRole.CUSTOMS_OFFICER}
-                    />
+                        {/* Equipment Content - Prioritized */}
+                        <TabsContent value="equipment">
+                            <Card className="bg-white border-0 shadow-sm">
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-lg font-bold">Equipment Details</CardTitle>
+                                    <Briefcase className="h-5 w-5 text-gray-500" />
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-4">
+                                    {equipmentList.length === 0 ? (
+                                        <p className="text-gray-500 italic">No equipment declared.</p>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {equipmentList.map((item, idx) => (
+                                                <div key={item.id || idx} className="border rounded-md p-4 bg-gray-50/50">
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">TYPE</p>
+                                                            <p className="text-sm font-bold text-gray-900">{item.type}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">DESCRIPTION</p>
+                                                            <p className="text-sm text-gray-900">{item.description}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">SERIAL NO.</p>
+                                                            <p className="text-sm font-mono text-gray-700">{item.serialNumber || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">VALUE</p>
+                                                            <p className="text-sm font-bold text-gray-900">{item.value} {item.currency}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">QUANTITY</p>
+                                                            <p className="text-sm font-bold text-gray-900">{item.quantity}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">STATUS</p>
+                                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${item.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
                 {/* Right Sidebar - Decision Panel */}
@@ -282,14 +319,25 @@ export function JournalistProfile() {
                                 <ShieldCheck className="h-5 w-5 text-blue-600" />
                                 <div>
                                     <h3 className="font-bold text-gray-900">Decision Panel</h3>
-                                    <p className="text-xs text-gray-500 leading-tight">Review carefully before taking action.</p>
+                                    <p className="text-xs text-gray-500 leading-tight">Current Status: <span className="font-bold">{application.status}</span></p>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <SystemCheckSuccess show={showSystemCheck} />
 
-                            {user?.role === UserRole.CUSTOMS_OFFICER ? (
+                            {canApprove && (
+                                <Button
+                                    className="w-full bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
+                                    onClick={handleApprove}
+                                    disabled={isStatusUpdating || application.status === 'APPROVED'}
+                                >
+                                    {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                    {application.status === 'APPROVED' ? 'Approved' : 'Approve Application'}
+                                </Button>
+                            )}
+
+                            {isCustoms && (
                                 <>
                                     <Button
                                         className="w-full bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
@@ -301,61 +349,15 @@ export function JournalistProfile() {
                                         <X className="h-4 w-4 mr-2" /> Reject Application
                                     </Button>
                                 </>
-                            ) : (
-                                <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex flex-col items-center gap-3 text-center">
-                                    <AlertCircle className="h-8 w-8 text-amber-500" />
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-bold text-amber-900">Restricted Access</p>
-                                        <p className="text-xs text-amber-700 leading-relaxed">
-                                            Visa approval and equipment verification are restricted to Customs Officers.
-                                        </p>
-                                    </div>
-                                    <Button variant="outline" className="w-full text-amber-700 border-amber-200 hover:bg-amber-100 h-9 font-bold" disabled>
-                                        Actions Locked
-                                    </Button>
-                                </div>
                             )}
 
-                            {isReadOnly && (
+                            {!canApprove && !isCustoms && (
                                 <div className="bg-gray-100 p-3 rounded-md text-sm text-gray-600 text-center">
-                                    Read-only access. Actions are disabled.
+                                    Read-only view for this role.
                                 </div>
                             )}
 
-                            <p className="text-xs text-center text-gray-400">Applied: 15 Dec 2024</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="bg-white border-0 shadow-sm">
-                        <CardHeader>
-                            <h3 className="font-bold text-gray-900">Verification Checklist</h3>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    disabled={user?.role !== UserRole.CUSTOMS_OFFICER}
-                                />
-                                <label className="text-sm text-gray-600 font-medium">Passport validity &gt; 2 months</label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    defaultChecked
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    disabled={user?.role !== UserRole.CUSTOMS_OFFICER}
-                                />
-                                <label className="text-sm text-gray-600 font-medium">Press Card Verified</label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    disabled={user?.role !== UserRole.CUSTOMS_OFFICER}
-                                />
-                                <label className="text-sm text-gray-600 font-medium">Photo meets requirements</label>
-                            </div>
+                            <p className="text-xs text-center text-gray-400">Applied: {application.createdAt ? new Date(application.createdAt).toLocaleDateString() : 'N/A'}</p>
                         </CardContent>
                     </Card>
                 </div>

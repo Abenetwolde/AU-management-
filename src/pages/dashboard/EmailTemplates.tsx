@@ -8,118 +8,137 @@ import {
     Pencil,
     Trash2,
     Eye,
-    FileText,
     X,
     Save,
     Paperclip,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    Loader2,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/auth/context';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-interface EmailTemplate {
-    id: string;
-    name: string;
-    subject: string;
-    body: string;
-    attachment?: string;
-    lastModified: string;
-    description?: string;
-}
-
-const MOCK_TEMPLATES: EmailTemplate[] = [
-    {
-        id: '1',
-        name: 'Registration Success',
-        subject: 'Accreditation Request Received',
-        description: 'Sent immediately after a journalist submits their registration form.',
-        body: 'Dear {{name}},\n\nYour registration for the upcoming AU Summit has been received and is being processed by our team.\n\nYou can track your status using your passport number: {{passportNo}}.\n\nBest regards,\nAU Media Team',
-        lastModified: '2024-12-18',
-    },
-    {
-        id: '2',
-        name: 'Approval Notification',
-        subject: 'Accreditation Approved - Badge Attached',
-        description: 'Sent when the application is fully approved by all authorities.',
-        body: 'Congratulations {{name}}!\n\nYour accreditation has been approved. Please find your digital badge attached to this email.\n\nYou will need to present this badge (printed or digital) at the entrance.\n\nSafe travels!',
-        attachment: 'Standard Badge Template',
-        lastModified: '2024-12-17',
-    },
-    {
-        id: '3',
-        name: 'Rejection Notice',
-        subject: 'Update on Your Accreditation Request',
-        description: 'Sent if the application is rejected by any authority.',
-        body: 'Dear {{name}},\n\nUnfortunately, your accreditation request has not been approved at this time.\n\nReason: {{reason}}\n\nYou may contact the support team for further clarification.',
-        lastModified: '2024-12-16',
-    },
-];
+import {
+    useGetEmailTemplatesQuery,
+    useCreateEmailTemplateMutation,
+    useUpdateEmailTemplateMutation,
+    useDeleteEmailTemplateMutation,
+    EmailTemplate
+} from '@/store/services/api';
 
 export function EmailTemplates() {
-    const [templates, setTemplates] = useState<EmailTemplate[]>(MOCK_TEMPLATES);
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const limit = 9; // Grid layout 3x3
+
+    // API Hooks
+    const { data, isLoading } = useGetEmailTemplatesQuery({ page, limit });
+    const [createTemplate, { isLoading: isCreating }] = useCreateEmailTemplateMutation();
+    const [updateTemplate, { isLoading: isUpdating }] = useUpdateEmailTemplateMutation();
+    const [deleteTemplate, { isLoading: isDeleting }] = useDeleteEmailTemplateMutation();
+
+    // Local State
     const [isEditorOpen, setIsEditorOpen] = useState(false);
-    const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+    const [editingTemplate, setEditingTemplate] = useState<Partial<EmailTemplate>>({});
     const [isPreviewMode, setIsPreviewMode] = useState(false);
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
     const { user } = useAuth();
+    // Assuming NISS_OFFICER is read-only based on previous context, or use permission system if available
     const isReadOnly = user?.role === 'NISS_OFFICER';
+
+    const templates = data?.templates || [];
+    const pagination = data?.pagination;
 
     const handleCreate = () => {
         setEditingTemplate({
-            id: Math.random().toString(36).substr(2, 9),
-            name: '',
-            subject: '',
-            body: '',
+            templateName: '',
+            emailSubject: '',
+            emailContent: '',
             description: '',
-            lastModified: new Date().toISOString().split('T')[0]
+            dynamicVariables: []
         });
+        setAttachmentFile(null);
         setIsEditorOpen(true);
         setIsPreviewMode(false);
     };
 
     const handleEdit = (template: EmailTemplate) => {
         setEditingTemplate({ ...template });
+        setAttachmentFile(null); // Reset file input
         setIsEditorOpen(true);
         setIsPreviewMode(false);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: number) => {
         if (confirm('Are you sure you want to delete this template?')) {
-            setTemplates(templates.filter(t => t.id !== id));
-            toast.success('Template deleted successfully');
+            try {
+                await deleteTemplate(id).unwrap();
+                toast.success('Template deleted successfully');
+            } catch (error) {
+                toast.error('Failed to delete template');
+            }
         }
     };
 
-    const handleSave = () => {
-        if (!editingTemplate) return;
-
-        if (!editingTemplate.name || !editingTemplate.subject || !editingTemplate.body) {
+    const handleSave = async () => {
+        if (!editingTemplate.templateName || !editingTemplate.emailSubject || !editingTemplate.emailContent) {
             toast.error('Please fill in all required fields');
             return;
         }
 
-        const templateExists = templates.find(t => t.id === editingTemplate.id);
-        if (templateExists) {
-            setTemplates(templates.map(t => t.id === editingTemplate.id ? { ...editingTemplate, lastModified: new Date().toISOString().split('T')[0] } : t));
-            toast.success('Template updated successfully');
-        } else {
-            setTemplates([...templates, { ...editingTemplate, lastModified: new Date().toISOString().split('T')[0] }]);
-            toast.success('Template created successfully');
+        const formData = new FormData();
+        formData.append('templateName', editingTemplate.templateName);
+        formData.append('emailSubject', editingTemplate.emailSubject);
+        formData.append('emailContent', editingTemplate.emailContent);
+        if (editingTemplate.description) formData.append('description', editingTemplate.description);
+
+        // Handle dynamic variables (extract from content or use explicit list)
+        // For now, we rely on backend extracting or sending explicit list if needed
+        // formData.append('dynamicVariables', JSON.stringify(['personName', 'status'])); 
+
+        if (attachmentFile) {
+            formData.append('attachment', attachmentFile);
         }
-        setIsEditorOpen(false);
+
+        try {
+            if (editingTemplate.id) {
+                await updateTemplate({ id: editingTemplate.id, data: formData }).unwrap();
+                toast.success('Template updated successfully');
+            } else {
+                await createTemplate(formData).unwrap();
+                toast.success('Template created successfully');
+            }
+            setIsEditorOpen(false);
+        } catch (error: any) {
+            console.error("Save Error:", error);
+            // Handle specific validation errors from API
+            if (error?.data?.errors?.errors?.[0]?.message) {
+                toast.error(error.data.errors.errors[0].message);
+            } else if (error?.data?.message) {
+                toast.error(error.data.message);
+            } else {
+                toast.error('Failed to save template');
+            }
+        }
     };
 
     const renderPreview = (body: string) => {
+        if (!body) return null;
         return body
-            .replace(/{{name}}/g, '<strong>John Doe</strong>')
-            .replace(/{{event}}/g, '<strong>AU Summit 2025</strong>')
-            .replace(/{{passportNo}}/g, '<strong>EP1234567</strong>')
-            .replace(/{{reason}}/g, '<em>missing press credentials</em>')
+            .replace(/{{personName}}/g, '<strong>John Doe</strong>')
+            .replace(/{{fullName}}/g, '<strong>John Doe</strong>')
+            .replace(/{{status}}/g, '<strong>APPROVED</strong>')
+            .replace(/{{passportNumber}}/g, '<strong>EP1234567</strong>')
             .split('\n')
             .map((line, i) => <p key={i} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />);
     };
+
+    if (isLoading) {
+        return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    }
 
     return (
         <div className="space-y-6">
@@ -145,9 +164,9 @@ export function EmailTemplates() {
                         <div className="h-2 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <CardHeader className="pb-3 flex flex-row items-start justify-between">
                             <div className="space-y-1">
-                                <CardTitle className="text-lg font-bold text-gray-900">{template.name}</CardTitle>
+                                <CardTitle className="text-lg font-bold text-gray-900">{template.templateName}</CardTitle>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                                    Modified: {template.lastModified}
+                                    Last Updated: {new Date(template.updatedAt).toLocaleDateString()}
                                 </p>
                             </div>
                             <div className="p-2.5 bg-blue-50 rounded-xl group-hover:bg-blue-600 transition-colors">
@@ -162,16 +181,16 @@ export function EmailTemplates() {
                             <div className="space-y-3 pt-2">
                                 <div className="p-3 bg-gray-50 rounded-lg space-y-1">
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Subject Line</p>
-                                    <p className="text-sm font-medium text-gray-700 truncate">{template.subject}</p>
+                                    <p className="text-sm font-medium text-gray-700 truncate">{template.emailSubject}</p>
                                 </div>
 
                                 <div className="flex items-center justify-between px-1">
                                     <div className="flex items-center gap-2 text-xs font-bold">
                                         <Paperclip className="h-3.5 w-3.5 text-gray-400" />
                                         <span className={cn(
-                                            template.attachment ? "text-green-600" : "text-gray-400"
+                                            template.attachmentUrl ? "text-green-600" : "text-gray-400"
                                         )}>
-                                            {template.attachment || 'None'}
+                                            {template.attachmentUrl ? 'Assessment attached' : 'None'}
                                         </span>
                                     </div>
                                     <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
@@ -194,6 +213,7 @@ export function EmailTemplates() {
                                         size="sm"
                                         onClick={() => handleDelete(template.id)}
                                         className="h-9 w-9 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                        disabled={isDeleting}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -214,8 +234,31 @@ export function EmailTemplates() {
                 )}
             </div>
 
+            {/* Pagination Controls */}
+            {pagination && pagination.totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-8">
+                    <Button
+                        variant="outline"
+                        disabled={page <= 1}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                    >
+                        <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                    </Button>
+                    <span className="flex items-center px-4 text-sm font-medium text-gray-600">
+                        Page {pagination.page} of {pagination.totalPages}
+                    </span>
+                    <Button
+                        variant="outline"
+                        disabled={page >= pagination.totalPages}
+                        onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                    >
+                        Next <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                </div>
+            )}
+
             {/* Template Editor Modal */}
-            {isEditorOpen && editingTemplate && (
+            {isEditorOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
                     <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-0">
                         <CardHeader className="border-b bg-white p-6 flex flex-row items-center justify-between">
@@ -224,7 +267,7 @@ export function EmailTemplates() {
                                     <Mail className="h-6 w-6 text-blue-600" />
                                 </div>
                                 <div>
-                                    <CardTitle>{isReadOnly ? 'Template Details' : (templates.find(t => t.id === editingTemplate.id) ? 'Edit Template' : 'New Template')}</CardTitle>
+                                    <CardTitle>{isReadOnly ? 'Template Details' : (editingTemplate.id ? 'Edit Template' : 'New Template')}</CardTitle>
                                     <CardDescription>Configure how your automated emails look and feel</CardDescription>
                                 </div>
                             </div>
@@ -241,8 +284,8 @@ export function EmailTemplates() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Template Name</label>
                                             <Input
-                                                value={editingTemplate.name}
-                                                onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                                                value={editingTemplate.templateName || ''}
+                                                onChange={(e) => setEditingTemplate({ ...editingTemplate, templateName: e.target.value })}
                                                 placeholder="e.g., Welcome Email"
                                                 readOnly={isReadOnly}
                                                 className="h-11 border-gray-200 focus:ring-blue-500"
@@ -251,8 +294,8 @@ export function EmailTemplates() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email Subject</label>
                                             <Input
-                                                value={editingTemplate.subject}
-                                                onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
+                                                value={editingTemplate.emailSubject || ''}
+                                                onChange={(e) => setEditingTemplate({ ...editingTemplate, emailSubject: e.target.value })}
                                                 placeholder="Enter email subject line..."
                                                 readOnly={isReadOnly}
                                                 className="h-11 border-gray-200 focus:ring-blue-500"
@@ -261,7 +304,7 @@ export function EmailTemplates() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Description (Optional)</label>
                                             <Input
-                                                value={editingTemplate.description}
+                                                value={editingTemplate.description || ''}
                                                 onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
                                                 placeholder="Briefly describe when this email is sent..."
                                                 readOnly={isReadOnly}
@@ -297,27 +340,17 @@ export function EmailTemplates() {
 
                                         {isPreviewMode ? (
                                             <div className="min-h-[250px] bg-white border border-gray-200 rounded-xl p-6 shadow-inner text-gray-700 leading-relaxed overflow-y-auto">
-                                                {renderPreview(editingTemplate.body)}
+                                                {renderPreview(editingTemplate.emailContent || '')}
                                             </div>
                                         ) : (
                                             <div className="relative">
                                                 <textarea
-                                                    value={editingTemplate.body}
-                                                    onChange={(e) => setEditingTemplate({ ...editingTemplate, body: e.target.value })}
-                                                    placeholder="Type your email content here. Use {{name}}, {{event}}, etc. for dynamic data."
+                                                    value={editingTemplate.emailContent || ''}
+                                                    onChange={(e) => setEditingTemplate({ ...editingTemplate, emailContent: e.target.value })}
+                                                    placeholder="Type your email content here. Use {{personName}}, {{status}}, etc. for dynamic data."
                                                     readOnly={isReadOnly}
                                                     className="w-full min-h-[250px] p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm leading-relaxed"
                                                 />
-                                                <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                                                    <div className="flex gap-1.5 p-1 bg-gray-50/80 backdrop-blur-sm rounded-lg border border-gray-100">
-                                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded cursor-help" title="Insert Dynamic Name">
-                                                            &#123;&#123;name&#125;&#125;
-                                                        </span>
-                                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded cursor-help" title="Insert Dynamic Event">
-                                                            &#123;&#123;event&#125;&#125;
-                                                        </span>
-                                                    </div>
-                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -338,13 +371,12 @@ export function EmailTemplates() {
                                             </p>
                                             <div className="space-y-2">
                                                 {[
-                                                    { key: '{{name}}', label: 'Full Name' },
-                                                    { key: '{{event}}', label: 'Event Title' },
-                                                    { key: '{{passportNo}}', label: 'Passport Number' },
-                                                    { key: '{{status}}', label: 'Current Status' }
+                                                    { key: '{{personName}}', label: 'Person Name' },
+                                                    { key: '{{status}}', label: 'Status' },
+                                                    { key: '{{passportNumber}}', label: 'Passport Number' }
                                                 ].map(v => (
                                                     <div key={v.key} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg group cursor-pointer hover:bg-blue-50"
-                                                        onClick={() => !isReadOnly && setEditingTemplate({ ...editingTemplate, body: editingTemplate.body + ' ' + v.key })}>
+                                                        onClick={() => !isReadOnly && setEditingTemplate({ ...editingTemplate, emailContent: (editingTemplate.emailContent || '') + ' ' + v.key })}>
                                                         <code className="text-[10px] font-mono font-bold text-blue-600">{v.key}</code>
                                                         <span className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">{v.label}</span>
                                                     </div>
@@ -355,26 +387,32 @@ export function EmailTemplates() {
 
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Attachment</label>
-                                        <div className="p-4 border-2 border-dashed border-gray-200 rounded-xl bg-white hover:border-blue-400 transition-colors group cursor-pointer">
+                                        <div className="p-4 border-2 border-dashed border-gray-200 rounded-xl bg-white hover:border-blue-400 transition-colors group cursor-pointer relative">
+                                            <Input
+                                                type="file"
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                onChange={(e) => setAttachmentFile(e.target.files ? e.target.files[0] : null)}
+                                                disabled={isReadOnly}
+                                            />
                                             <div className="flex flex-col items-center gap-2 text-center text-gray-400 group-hover:text-blue-500">
                                                 <Paperclip className="h-8 w-8 opacity-20 group-hover:opacity-100 transition-all" />
                                                 <div className="space-y-0.5">
-                                                    <p className="text-xs font-bold">Select Badge Template</p>
+                                                    <p className="text-xs font-bold">{attachmentFile ? attachmentFile.name : 'Select File (Optional)'}</p>
                                                     <p className="text-[10px]">PDF layout attached to email</p>
                                                 </div>
                                                 <Button variant="outline" size="sm" className="mt-2 h-8 text-xs font-bold border-gray-200 group-hover:border-blue-200">
-                                                    Choose File
+                                                    {attachmentFile ? 'Change File' : 'Choose File'}
                                                 </Button>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {editingTemplate.body.length > 0 && (
+                                    {(editingTemplate.emailContent?.length || 0) > 0 && (
                                         <div className="p-4 bg-green-50 rounded-xl flex items-start gap-3 border border-green-100 animate-in slide-in-from-bottom-2 duration-300">
                                             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
                                             <div className="space-y-1">
-                                                <p className="text-xs font-bold text-green-800">Ready to Publish</p>
-                                                <p className="text-[10px] text-green-700/80">All mandatory fields are filled and valid markers detected.</p>
+                                                <p className="text-xs font-bold text-green-800">Ready to Save</p>
+                                                <p className="text-[10px] text-green-700/80">Content looks good.</p>
                                             </div>
                                         </div>
                                     )}
@@ -390,7 +428,9 @@ export function EmailTemplates() {
                                 <Button
                                     onClick={handleSave}
                                     className="px-8 bg-blue-600 hover:bg-blue-700 gap-2 font-bold shadow-[0_4px_12px_rgba(37,99,235,0.3)] h-11"
+                                    disabled={isCreating || isUpdating}
                                 >
+                                    {(isCreating || isUpdating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     <Save className="h-4 w-4" />
                                     Save Template
                                 </Button>

@@ -5,60 +5,109 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Save, Plus, Trash2, Eye, EyeOff, Loader2, Upload } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import {
+    useGetLandingPageSettingsQuery,
+    useCreateLandingPageSettingsMutation,
+    getFileUrl
+} from '@/store/services/api';
 
 interface Language {
     code: string;
     name: string;
-    flag: string;
+    flagEmoji: string;
     enabled: boolean;
 }
 
-interface SystemSettings {
-    motto: string;
+// Internal state structure matching form needs
+interface SystemSettingsForm {
+    heroMotto: string;
     description: string;
-    privacyPolicy: string;
+    privacyPolicyContent: string;
     deadlineEnabled: boolean;
     deadlineDate: string;
+    contactEmail: string;
+    contactLink: string;
     languages: Language[];
 }
 
-const DEFAULT_SETTINGS: SystemSettings = {
-    motto: "Cover the Future of Africa",
-    description: "Secure your official media accreditation for the African Union Summit. A streamlined, secure, and fully digital invitation process for global journalists.",
-    privacyPolicy: "<h1>Privacy Policy</h1><p>Your privacy is important to us...</p>",
+const DEFAULT_SETTINGS: SystemSettingsForm = {
+    heroMotto: "Cover the Future of Africa",
+    description: "Secure your official media accreditation for the African Union Summit.",
+    privacyPolicyContent: "<h1>Privacy Policy</h1><p>Your privacy is important to us...</p>",
     deadlineEnabled: true,
     deadlineDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    contactEmail: "",
+    contactLink: "",
     languages: [
-        { code: 'en', name: 'English', flag: '🇺🇸', enabled: true },
-        { code: 'es', name: 'Español', flag: '🇪🇸', enabled: true },
-        { code: 'fr', name: 'Français', flag: '🇫🇷', enabled: true },
-        { code: 'it', name: 'Italiano', flag: '🇮🇹', enabled: true },
-        { code: 'sw', name: 'Kiswahili', flag: '🇰🇪', enabled: true },
+        { code: 'en', name: 'English', flagEmoji: '�🇸', enabled: true },
+        { code: 'fr', name: 'Français', flagEmoji: '🇫🇷', enabled: true },
     ]
 };
 
 export function SystemSettings() {
-    const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+    // API Hooks
+    const { data: apiSettings, isLoading } = useGetLandingPageSettingsQuery();
+    const [createSettings, { isLoading: isSaving }] = useCreateLandingPageSettingsMutation();
+
+    const [settings, setSettings] = useState<SystemSettingsForm>(DEFAULT_SETTINGS);
     const [showPreview, setShowPreview] = useState(false);
-    const [newLang, setNewLang] = useState({ code: '', name: '', flag: '' });
+    const [newLang, setNewLang] = useState({ code: '', name: '', flagEmoji: '' });
 
+    // File inputs
+    const [mainLogo, setMainLogo] = useState<File | null>(null);
+    const [footerLogo, setFooterLogo] = useState<File | null>(null);
+
+    // Sync API data to local state
     useEffect(() => {
-        const saved = localStorage.getItem('system_settings');
-        if (saved) {
-            try {
-                setSettings(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to parse settings", e);
-            }
+        if (apiSettings) {
+            setSettings({
+                heroMotto: apiSettings.heroMotto || DEFAULT_SETTINGS.heroMotto,
+                description: apiSettings.description || DEFAULT_SETTINGS.description,
+                privacyPolicyContent: apiSettings.privacyPolicyContent || DEFAULT_SETTINGS.privacyPolicyContent,
+                deadlineEnabled: !!apiSettings.deadlineDate,
+                deadlineDate: apiSettings.deadlineDate ? new Date(apiSettings.deadlineDate).toISOString().split('T')[0] : DEFAULT_SETTINGS.deadlineDate,
+                contactEmail: apiSettings.contactEmail || "",
+                contactLink: apiSettings.contactLink || "",
+                languages: apiSettings.languages && apiSettings.languages.length > 0
+                    ? apiSettings.languages.map(l => ({ ...l, enabled: true }))
+                    : DEFAULT_SETTINGS.languages
+            });
         }
-    }, []);
+    }, [apiSettings]);
 
-    const handleSave = () => {
-        localStorage.setItem('system_settings', JSON.stringify(settings));
-        toast.success("Settings saved successfully");
+    const handleSave = async () => {
+        const formData = new FormData();
+        formData.append('heroMotto', settings.heroMotto);
+        formData.append('description', settings.description);
+        formData.append('privacyPolicyContent', settings.privacyPolicyContent);
+        formData.append('contactEmail', settings.contactEmail);
+        formData.append('contactLink', settings.contactLink);
+
+        if (settings.deadlineEnabled && settings.deadlineDate) {
+            formData.append('deadlineDate', new Date(settings.deadlineDate).toISOString());
+        }
+
+        // Filter enabled languages and map to API expected format
+        const enabledLangs = settings.languages
+            .filter(l => l.enabled)
+            .map(({ enabled, ...rest }) => rest);
+        formData.append('languages', JSON.stringify(enabledLangs));
+
+        if (mainLogo) formData.append('mainLogo', mainLogo);
+        if (footerLogo) formData.append('footerLogo', footerLogo);
+
+        try {
+            await createSettings(formData).unwrap();
+            toast.success("Settings saved successfully");
+            setMainLogo(null);
+            setFooterLogo(null);
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to save settings: " + (error?.data?.message || error.message));
+        }
     };
 
     const toggleLanguage = (code: string) => {
@@ -76,7 +125,7 @@ export function SystemSettings() {
     };
 
     const addLanguage = () => {
-        if (!newLang.code || !newLang.name || !newLang.flag) {
+        if (!newLang.code || !newLang.name || !newLang.flagEmoji) {
             toast.error("Please fill all language fields");
             return;
         }
@@ -84,8 +133,12 @@ export function SystemSettings() {
             ...prev,
             languages: [...prev.languages, { ...newLang, enabled: true }]
         }));
-        setNewLang({ code: '', name: '', flag: '' });
+        setNewLang({ code: '', name: '', flagEmoji: '' });
     };
+
+    if (isLoading) {
+        return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    }
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto pb-10">
@@ -94,8 +147,9 @@ export function SystemSettings() {
                     <h1 className="text-3xl font-bold tracking-tight">System Settings</h1>
                     <p className="text-muted-foreground">Manage landing page content, localization, and policies.</p>
                 </div>
-                <Button onClick={handleSave} className="gap-2">
-                    <Save className="w-4 h-4" /> Save Changes
+                <Button onClick={handleSave} disabled={isSaving} className="gap-2 bg-blue-600 hover:bg-blue-700">
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Changes
                 </Button>
             </div>
 
@@ -110,8 +164,8 @@ export function SystemSettings() {
                         <div className="space-y-2">
                             <Label>Hero Motto (Big Text)</Label>
                             <Input
-                                value={settings.motto}
-                                onChange={(e) => setSettings({ ...settings, motto: e.target.value })}
+                                value={settings.heroMotto}
+                                onChange={(e) => setSettings({ ...settings, heroMotto: e.target.value })}
                                 placeholder="e.g. Cover the Future of Africa"
                             />
                         </div>
@@ -123,6 +177,24 @@ export function SystemSettings() {
                                 placeholder="Short description of the event..."
                                 className="h-24"
                             />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Contact Email</Label>
+                                <Input
+                                    value={settings.contactEmail}
+                                    onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
+                                    placeholder="contact@example.com"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Contact Link</Label>
+                                <Input
+                                    value={settings.contactLink}
+                                    onChange={(e) => setSettings({ ...settings, contactLink: e.target.value })}
+                                    placeholder="https://support.example.com"
+                                />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -137,22 +209,64 @@ export function SystemSettings() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <Label>Main Logo</Label>
-                                <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition-colors cursor-pointer">
-                                    <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
-                                        <Plus className="h-6 w-6 text-gray-400" />
-                                    </div>
-                                    <span className="text-sm text-gray-500">Click to upload main logo</span>
-                                    <Input type="file" className="hidden" accept="image/*" />
+                                <div
+                                    className="border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition-colors cursor-pointer relative overflow-hidden"
+                                    onClick={() => document.getElementById('mainLogoInput')?.click()}
+                                >
+                                    {mainLogo ? (
+                                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                            <Upload className="h-6 w-6 text-gray-400" />
+                                        </div>
+                                    ) : apiSettings?.mainLogoUrl ? (
+                                        <div className="h-16 w-16 relative">
+                                            <img
+                                                src={getFileUrl(apiSettings.mainLogoUrl)}
+                                                alt="Main Logo"
+                                                className="h-full w-full object-contain"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                            <Upload className="h-6 w-6 text-gray-400" />
+                                        </div>
+                                    )}
+
+                                    <span className="text-sm text-gray-500 font-medium">
+                                        {mainLogo ? mainLogo.name : (apiSettings?.mainLogoUrl ? 'Change Main Logo' : 'Upload Main Logo')}
+                                    </span>
+                                    {apiSettings?.mainLogoUrl && !mainLogo && <span className="text-xs text-green-600 font-bold">Current logo active</span>}
+                                    <Input id="mainLogoInput" type="file" className="hidden" accept="image/*" onChange={(e) => setMainLogo(e.target.files?.[0] || null)} />
                                 </div>
                             </div>
                             <div className="space-y-2">
                                 <Label>Footer Logo / Partner Logo</Label>
-                                <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition-colors cursor-pointer">
-                                    <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
-                                        <Plus className="h-6 w-6 text-gray-400" />
-                                    </div>
-                                    <span className="text-sm text-gray-500">Click to upload partner logo</span>
-                                    <Input type="file" className="hidden" accept="image/*" />
+                                <div
+                                    className="border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition-colors cursor-pointer relative overflow-hidden"
+                                    onClick={() => document.getElementById('footerLogoInput')?.click()}
+                                >
+                                    {footerLogo ? (
+                                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                            <Upload className="h-6 w-6 text-gray-400" />
+                                        </div>
+                                    ) : apiSettings?.footerLogoUrl ? (
+                                        <div className="h-16 w-16 relative">
+                                            <img
+                                                src={getFileUrl(apiSettings.footerLogoUrl)}
+                                                alt="Footer Logo"
+                                                className="h-full w-full object-contain"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                            <Upload className="h-6 w-6 text-gray-400" />
+                                        </div>
+                                    )}
+
+                                    <span className="text-sm text-gray-500 font-medium">
+                                        {footerLogo ? footerLogo.name : (apiSettings?.footerLogoUrl ? 'Change Footer Logo' : 'Upload Footer Logo')}
+                                    </span>
+                                    {apiSettings?.footerLogoUrl && !footerLogo && <span className="text-xs text-green-600 font-bold">Current logo active</span>}
+                                    <Input id="footerLogoInput" type="file" className="hidden" accept="image/*" onChange={(e) => setFooterLogo(e.target.files?.[0] || null)} />
                                 </div>
                             </div>
                         </div>
@@ -201,7 +315,7 @@ export function SystemSettings() {
                             {settings.languages.map((lang) => (
                                 <div key={lang.code} className="flex items-center justify-between bg-secondary/20 p-3 rounded-lg">
                                     <div className="flex items-center gap-4">
-                                        <span className="text-2xl">{lang.flag}</span>
+                                        <span className="text-2xl">{lang.flagEmoji}</span>
                                         <div>
                                             <p className="font-medium">{lang.name}</p>
                                             <p className="text-xs text-muted-foreground uppercase">{lang.code}</p>
@@ -233,7 +347,7 @@ export function SystemSettings() {
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs">Flag Emoji</Label>
-                                <Input value={newLang.flag} onChange={e => setNewLang({ ...newLang, flag: e.target.value })} placeholder="🇺🇸" />
+                                <Input value={newLang.flagEmoji} onChange={e => setNewLang({ ...newLang, flagEmoji: e.target.value })} placeholder="🇺🇸" />
                             </div>
                             <Button onClick={addLanguage} variant="secondary" className="gap-2">
                                 <Plus className="w-4 h-4" /> Add
@@ -257,11 +371,11 @@ export function SystemSettings() {
                     </CardHeader>
                     <CardContent>
                         {showPreview ? (
-                            <div className="border rounded-md p-4 min-h-[300px] prose prose-sm max-w-none bg-white lg:prose-lg" dangerouslySetInnerHTML={{ __html: settings.privacyPolicy }} />
+                            <div className="border rounded-md p-4 min-h-[300px] prose prose-sm max-w-none bg-white lg:prose-lg" dangerouslySetInnerHTML={{ __html: settings.privacyPolicyContent }} />
                         ) : (
                             <Textarea
-                                value={settings.privacyPolicy}
-                                onChange={(e) => setSettings({ ...settings, privacyPolicy: e.target.value })}
+                                value={settings.privacyPolicyContent}
+                                onChange={(e) => setSettings({ ...settings, privacyPolicyContent: e.target.value })}
                                 className="min-h-[300px] font-mono text-sm"
                                 placeholder="<h1>Title</h1><p>Content...</p>"
                             />

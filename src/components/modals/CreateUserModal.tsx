@@ -17,20 +17,22 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { UserRole } from '@/auth/context';
+import { Role } from '@/store/services/api';
 
 interface CreateUserModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onConfirm: (userData: { name: string; email: string; password: string; role: UserRole }) => void;
+    onConfirm: (userData: { fullName: string; email: string; password: string; roleId: string }) => void;
+    roles: Role[];
+    isLoading?: boolean;
 }
 
-export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserModalProps) {
+export function CreateUserModal({ open, onOpenChange, onConfirm, roles, isLoading }: CreateUserModalProps) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [role, setRole] = useState<UserRole | ''>('');
+    const [roleId, setRoleId] = useState('');
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
     const validate = () => {
@@ -42,7 +44,7 @@ export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserMod
         if (!password) newErrors.password = 'Password is required';
         else if (password.length < 8) newErrors.password = 'Password must be at least 8 characters';
         if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-        if (!role) newErrors.role = 'Role is required';
+        if (!roleId) newErrors.role = 'Role is required';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -50,15 +52,14 @@ export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserMod
 
     const handleConfirm = () => {
         if (validate()) {
-            onConfirm({ name, email, password, role: role as UserRole });
+            onConfirm({ fullName: name, email, password, roleId });
             // Reset form
             setName('');
             setEmail('');
             setPassword('');
             setConfirmPassword('');
-            setRole('');
+            setRoleId('');
             setErrors({});
-            onOpenChange(false);
         }
     };
 
@@ -68,7 +69,7 @@ export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserMod
                 <DialogHeader>
                     <DialogTitle>Create New User</DialogTitle>
                     <DialogDescription>
-                        Add a new user to the system with their credentials and role.
+                        Add a new user to the organization with specific credentials and role.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -122,18 +123,14 @@ export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserMod
 
                     <div className="space-y-2">
                         <Label htmlFor="role">Role *</Label>
-                        <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
+                        <Select value={roleId} onValueChange={setRoleId}>
                             <SelectTrigger id="role">
                                 <SelectValue placeholder="Select user role" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value={UserRole.SUPER_ADMIN}>Super Admin</SelectItem>
-                                <SelectItem value={UserRole.EMA_OFFICER}>EMA Officer</SelectItem>
-                                <SelectItem value={UserRole.ICS_OFFICER}>ICS Officer</SelectItem>
-                                <SelectItem value={UserRole.NISS_OFFICER}>NISS Officer</SelectItem>
-                                <SelectItem value={UserRole.INSA_OFFICER}>INSA Officer</SelectItem>
-                                <SelectItem value={UserRole.CUSTOMS_OFFICER}>Customs Officer</SelectItem>
-                                <SelectItem value={UserRole.AU_ADMIN}>AU Admin</SelectItem>
+                                {roles?.length > 0 ? roles.map(r => (
+                                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                                )) : <SelectItem value="none" disabled>No roles available</SelectItem>}
                             </SelectContent>
                         </Select>
                         {errors.role && <p className="text-xs text-red-600">{errors.role}</p>}
@@ -144,8 +141,8 @@ export function CreateUserModal({ open, onOpenChange, onConfirm }: CreateUserMod
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button onClick={handleConfirm} className="bg-[#009b4d] hover:bg-[#007a3d]">
-                        Create User
+                    <Button onClick={handleConfirm} disabled={isLoading} className="bg-[#009b4d] hover:bg-[#007a3d]">
+                        {isLoading ? 'Creating...' : 'Create User'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

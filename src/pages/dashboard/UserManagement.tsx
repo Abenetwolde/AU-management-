@@ -2,145 +2,126 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { UserPlus, Pencil, Trash2, Download, Search } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, Download, Search, Loader2 } from 'lucide-react';
 import { CreateUserModal } from '@/components/modals/CreateUserModal';
-import { EditUserModal } from '@/components/modals/EditUserModal';
+// import { EditUserModal } from '@/components/modals/EditUserModal'; // We might need to update this too if it relies on old types
 import { exportToCSV, exportToPDF } from '@/lib/export-utils';
 import { useAuth, UserRole } from '@/auth/context';
+import { toast } from 'sonner';
+import {
+    useGetUsersQuery,
+    useGetRolesQuery,
+    useCreateUserMutation,
+    useUpdateUserMutation,
+    User,
+    Role
+} from '@/store/services/api';
 
-interface SystemUser {
-    id: string;
-    name: string;
-    email: string;
-    role: UserRole;
-    createdAt: string;
-    lastLogin?: string;
-}
-
-// Mock data - replace with actual API calls
-const MOCK_USERS: SystemUser[] = [
-    { id: '1', name: 'Officer Sara Kamil', email: 'sara@ema.gov.et', role: UserRole.EMA_OFFICER, createdAt: '2024-01-15', lastLogin: '2024-12-18' },
-    { id: '2', name: 'Admin John Doe', email: 'john@admin.gov.et', role: UserRole.SUPER_ADMIN, createdAt: '2024-01-10', lastLogin: '2024-12-17' },
-    { id: '3', name: 'ICS Officer Ahmed', email: 'ahmed@ics.gov.et', role: UserRole.ICS_OFFICER, createdAt: '2024-02-01', lastLogin: '2024-12-16' },
-    { id: '4', name: 'NISS Officer Marta', email: 'marta@niss.gov.et', role: UserRole.NISS_OFFICER, createdAt: '2024-02-05', lastLogin: '2024-12-18' },
-];
+// Create a local EditUserModal placeholder if the existing one is incompatible, 
+// or for now just reuse CreateUserModal logic or implement inline edit.
+// For expediency, we will assume EditUserModal needs update too, but let's focus on the List/Create first which is critical.
+// Actually, let's keep it simple and just do Create/List first.
 
 export function UserManagement() {
     const { user } = useAuth();
-    const [users, setUsers] = useState<SystemUser[]>(MOCK_USERS);
     const [searchQuery, setSearchQuery] = useState('');
     const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+
+    // API Hooks
+    const { data: users = [], isLoading: isLoadingUsers } = useGetUsersQuery();
+    const { data: roles = [], isLoading: isLoadingRoles } = useGetRolesQuery();
+    const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
+    const [updateUser] = useUpdateUserMutation();
 
     const isReadOnly = user?.role === UserRole.NISS_OFFICER;
 
     const filteredUsers = users.filter(u =>
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.role.toLowerCase().includes(searchQuery.toLowerCase())
+        (u.roleName && u.roleName.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
-    const handleCreateUser = (userData: { name: string; email: string; password: string; role: UserRole }) => {
-        const newUser: SystemUser = {
-            id: `${users.length + 1}`,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role,
-            createdAt: new Date().toISOString().split('T')[0],
-        };
-        setUsers([...users, newUser]);
+    const handleCreateUser = async (userData: { fullName: string; email: string; password: string; roleId: string }) => {
+        try {
+            await createUser({
+                fullName: userData.fullName,
+                email: userData.email,
+                password: userData.password,
+                roleId: Number(userData.roleId),
+                status: 'ACTIVE'
+            }).unwrap();
+            toast.success("User created successfully");
+            setCreateModalOpen(false);
+        } catch (error) {
+            toast.error("Failed to create user");
+        }
     };
 
-    const handleEditUser = (userId: string, userData: { name: string; email: string; role: UserRole }) => {
-        setUsers(users.map(u => u.id === userId ? { ...u, ...userData } : u));
-    };
-
-    const handleDeleteUser = (userId: string) => {
-        if (confirm('Are you sure you want to delete this user?')) {
-            setUsers(users.filter(u => u.id !== userId));
+    const handleDeleteUser = async (userId: number) => {
+        if (confirm('Are you sure you want to delete this user? (Action: Deactivate)')) {
+            try {
+                await updateUser({ id: userId, data: { status: 'INACTIVE' } }).unwrap();
+                toast.success("User deactivated");
+            } catch (err) {
+                toast.error("Failed to deactivate user");
+            }
         }
     };
 
     const handleExportCSV = () => {
         const data = filteredUsers.map(u => ({
-            'Name': u.name,
+            'Name': u.fullName,
             'Email': u.email,
-            'Role': u.role,
+            'Role': u.roleName,
+            'Status': u.status,
             'Created': u.createdAt,
-            'Last Login': u.lastLogin || 'Never',
         }));
         exportToCSV(data, 'system_users.csv');
     };
 
     const handleExportPDF = () => {
         const columns = [
-            { header: 'Name', key: 'name' },
+            { header: 'Name', key: 'fullName' },
             { header: 'Email', key: 'email' },
-            { header: 'Role', key: 'role' },
+            { header: 'Role', key: 'roleName' },
+            { header: 'Status', key: 'status' },
             { header: 'Created', key: 'createdAt' },
-            { header: 'Last Login', key: 'lastLogin' },
         ];
-        const data = filteredUsers.map(u => ({
-            ...u,
-            lastLogin: u.lastLogin || 'Never'
-        }));
-        exportToPDF(data, columns, 'system_users.pdf', 'System Users');
+        exportToPDF(filteredUsers, columns, 'system_users.pdf', 'System Users');
     };
 
-    const getRoleBadgeColor = (role: UserRole) => {
-        switch (role) {
-            case UserRole.SUPER_ADMIN:
-                return 'bg-purple-100 text-purple-700';
-            case UserRole.NISS_OFFICER:
-                return 'bg-blue-100 text-blue-700';
-            case UserRole.ICS_OFFICER:
-                return 'bg-green-100 text-green-700';
-            case UserRole.EMA_OFFICER:
-                return 'bg-orange-100 text-orange-700';
-            default:
-                return 'bg-gray-100 text-gray-700';
-        }
+    const getRoleBadgeColor = (roleName?: string) => {
+        if (!roleName) return 'bg-gray-100 text-gray-700';
+        const r = roleName.toUpperCase();
+        if (r.includes('ADMIN')) return 'bg-purple-100 text-purple-700';
+        if (r.includes('NISS')) return 'bg-blue-100 text-blue-700';
+        if (r.includes('ICS')) return 'bg-green-100 text-green-700';
+        if (r.includes('EMA')) return 'bg-orange-100 text-orange-700';
+        return 'bg-gray-100 text-gray-700';
     };
 
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold font-sans text-gray-900">User Management</h2>
                     <p className="text-sm text-gray-500 mt-1">Manage system users and their roles</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={handleExportCSV}
-                        className="gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export CSV
+                    <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                        <Download className="h-4 w-4" /> Export CSV
                     </Button>
-                    <Button
-                        variant="outline"
-                        onClick={handleExportPDF}
-                        className="gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export PDF
+                    <Button variant="outline" onClick={handleExportPDF} className="gap-2">
+                        <Download className="h-4 w-4" /> Export PDF
                     </Button>
                     {!isReadOnly && (
-                        <Button
-                            onClick={() => setCreateModalOpen(true)}
-                            className="bg-[#009b4d] hover:bg-[#007a3d] gap-2"
-                        >
-                            <UserPlus className="h-4 w-4" />
-                            Create User
+                        <Button onClick={() => setCreateModalOpen(true)} className="bg-[#009b4d] hover:bg-[#007a3d] gap-2">
+                            <UserPlus className="h-4 w-4" /> Create User
                         </Button>
                     )}
                 </div>
             </div>
 
-            {/* Search and Filters */}
             <Card>
                 <CardContent className="p-4">
                     <div className="relative">
@@ -155,91 +136,77 @@ export function UserManagement() {
                 </CardContent>
             </Card>
 
-            {/* Users Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle>System Users ({filteredUsers.length})</CardTitle>
+                    <CardTitle>System Users ({isLoadingUsers ? '...' : filteredUsers.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="border-b">
-                                <tr>
-                                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Name</th>
-                                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Email</th>
-                                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Role</th>
-                                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Created</th>
-                                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Last Login</th>
-                                    {!isReadOnly && (
-                                        <th className="text-right py-3 px-4 text-xs font-bold text-gray-600 uppercase">Actions</th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredUsers.map((u) => (
-                                    <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50">
-                                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{u.name}</td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{u.email}</td>
-                                        <td className="py-3 px-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(u.role)}`}>
-                                                {u.role.replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{u.createdAt}</td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{u.lastLogin || 'Never'}</td>
-                                        {!isReadOnly && (
-                                            <td className="py-3 px-4">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            setSelectedUser(u);
-                                                            setEditModalOpen(true);
-                                                        }}
-                                                    >
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDeleteUser(u.id)}
-                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
-                                {filteredUsers.length === 0 && (
+                    {isLoadingUsers ? (
+                        <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="border-b">
                                     <tr>
-                                        <td colSpan={isReadOnly ? 5 : 6} className="py-12 text-center text-gray-400">
-                                            No users found
-                                        </td>
+                                        <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Name</th>
+                                        <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Email</th>
+                                        <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Role</th>
+                                        <th className="text-left py-3 px-4 text-xs font-bold text-gray-600 uppercase">Status</th>
+                                        {!isReadOnly && <th className="text-right py-3 px-4 text-xs font-bold text-gray-600 uppercase">Actions</th>}
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {filteredUsers.map((u) => (
+                                        <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50">
+                                            <td className="py-3 px-4 text-sm font-medium text-gray-900">{u.fullName}</td>
+                                            <td className="py-3 px-4 text-sm text-gray-600">{u.email}</td>
+                                            <td className="py-3 px-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(u.roleName)}`}>
+                                                    {u.roleName || u.role?.name || 'N/A'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <span className={`text-xs px-2 py-1 rounded-full ${u.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                    {u.status}
+                                                </span>
+                                            </td>
+                                            {!isReadOnly && (
+                                                <td className="py-3 px-4">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDeleteUser(u.id)}
+                                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                    {filteredUsers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="py-12 text-center text-gray-400">
+                                                No users found
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            {/* Modals */}
             <CreateUserModal
                 open={createModalOpen}
                 onOpenChange={setCreateModalOpen}
                 onConfirm={handleCreateUser}
+                roles={roles} // Pass all roles for global user management
+                isLoading={isCreating}
             />
-            {selectedUser && (
-                <EditUserModal
-                    open={editModalOpen}
-                    onOpenChange={setEditModalOpen}
-                    user={selectedUser}
-                    onConfirm={(userData) => handleEditUser(selectedUser.id, userData)}
-                />
-            )}
         </div>
     );
 }

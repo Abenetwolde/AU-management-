@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/auth/context';
 import { cn } from '@/lib/utils';
-import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, FileText, Settings, Building2, GitMerge, ShieldAlert } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, FileText, Settings, Building2, GitMerge, ShieldAlert, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import emmpaLogo from '@/assests/emmpa.png';
 import icsLogo from '@/assests/ics.png';
@@ -178,6 +178,20 @@ export function DashboardLayout() {
                             >
                                 <Building2 className="h-5 w-5" />
                                 Organizations
+                            </NavLink>
+                            <NavLink
+                                to={`${basePath}/roles`}
+                                className={({ isActive }) =>
+                                    cn(
+                                        "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                                        isActive
+                                            ? "bg-[#e6f4ea] text-primary"
+                                            : "text-muted-foreground hover:bg-gray-100 hover:text-foreground"
+                                    )
+                                }
+                            >
+                                <Shield className="h-5 w-5" />
+                                Roles
                             </NavLink>
                             <NavLink
                                 to={`${basePath}/workflow`}

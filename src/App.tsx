@@ -33,6 +33,7 @@ import { SystemSettings } from './pages/dashboard/SystemSettings';
 import { OrganizationManagement } from './pages/dashboard/OrganizationManagement';
 import { WorkflowBuilder } from './pages/dashboard/WorkflowBuilder';
 import { PermissionManagement } from './pages/dashboard/PermissionManagement';
+import { RoleManagement } from './pages/dashboard/RoleManagement';
 import { Toaster } from 'sonner';
 
 import { useEffect } from 'react';
@@ -79,6 +80,7 @@ function App() {
                                     <Route path="organizations" element={<OrganizationManagement />} />
                                     <Route path="workflow" element={<WorkflowBuilder />} />
                                     <Route path="permissions" element={<PermissionManagement />} />
+                                    <Route path="roles" element={<RoleManagement />} />
                                 </Route>
                             </Route>
 

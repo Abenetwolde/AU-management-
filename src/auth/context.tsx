@@ -20,11 +20,12 @@ interface User {
     email: string;
     role: UserRole;
     gate?: string;
+    permissions?: any[]; // For storing API permissions
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, role: UserRole) => void;
+    login: (email: string, role: UserRole, permissions?: any[], fullName?: string) => void;
     logout: () => void;
     isAuthenticated: boolean;
 }
@@ -36,17 +37,22 @@ const USER_STORAGE_KEY = 'managment_user';
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(() => {
         const stored = localStorage.getItem(USER_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : null;
+        try {
+            return stored ? JSON.parse(stored) : null;
+        } catch {
+            return null;
+        }
     });
 
-    const login = (email: string, role: UserRole) => {
-        // Mock user data
+    const login = (email: string, role: UserRole, permissions: any[] = [], fullName: string = 'Officer Sara Kamil') => {
+        // Use provided name/permissions if available (from API), otherwise default
         const newUser: User = {
             id: '1234-AU',
-            name: 'Officer Sara Kamil',
+            name: fullName,
             email,
             role,
-            gate: 'GATE 1'
+            gate: 'GATE 1',
+            permissions
         };
         setUser(newUser);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
@@ -55,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = () => {
         setUser(null);
         localStorage.removeItem(USER_STORAGE_KEY);
+        // Also remove the token
+        localStorage.removeItem('managment_token');
     };
 
     return (

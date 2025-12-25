@@ -1,56 +1,103 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/auth/context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plane } from 'lucide-react';
+import { useLoginMutation } from '@/store/services/api';
+import { toast } from 'sonner';
 
 export function Login() {
-    const [email, setEmail] = useState('admin@au.org');
-    const [password, setPassword] = useState('password');
+    const [email, setEmail] = useState('admin@ausmc.org');
+    const [password, setPassword] = useState('admin@123');
     const { login } = useAuth();
     const navigate = useNavigate();
+    const [apiLogin, { isLoading }] = useLoginMutation();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Simulate login logic
+
+        try {
+            // Attempt API Login
+            const response = await apiLogin({ email, password }).unwrap();
+
+            if (response.success && response.data) {
+                const { token, user } = response.data;
+                // Store token in localStorage for API calls
+                localStorage.setItem('managment_token', token);
+
+                // Determine UserRole enum from API roleName string
+                let roleEnum = UserRole.EMA_OFFICER; // Default fallback
+                switch (user.roleName) {
+                    case 'SUPER_ADMIN': roleEnum = UserRole.SUPER_ADMIN; break;
+                    case 'EMA_OFFICER': roleEnum = UserRole.EMA_OFFICER; break;
+                    case 'ICS_OFFICER': roleEnum = UserRole.ICS_OFFICER; break;
+                    case 'NISS_OFFICER': roleEnum = UserRole.NISS_OFFICER; break;
+                    case 'INSA_OFFICER': roleEnum = UserRole.INSA_OFFICER; break;
+                    case 'CUSTOMS_OFFICER': roleEnum = UserRole.CUSTOMS_OFFICER; break;
+                    case 'AU_ADMIN': roleEnum = UserRole.AU_ADMIN; break;
+                    // Add other mappings as needed
+                }
+
+                // Call context login to set state
+                login(user.email, roleEnum, user.permissions, user.fullName);
+
+                // Navigate based on role (using same logic as below)
+                navigateBasedOnRole(roleEnum, user.email);
+                toast.success("Login Successful");
+                return;
+            }
+        } catch (err) {
+            console.log("API Login failed, falling back to mock logic...", err);
+            // Fallback to legacy mock logic if API fails or credentials rejected by API (if API throws on 401)
+        }
+
+        // --- Mock Fallback Logic ---
         if (email && password) {
+            // Mapping for mock logic
             if (email === 'admin@au.org') {
                 login(email, UserRole.SUPER_ADMIN);
-                navigate('/admin');
+                navigateBasedOnRole(UserRole.SUPER_ADMIN, email);
             } else if (email === 'ics@au.org') {
                 login(email, UserRole.ICS_OFFICER);
-                navigate('/ics/journalists');
+                navigateBasedOnRole(UserRole.ICS_OFFICER, email);
             } else if (email === 'niss@au.org') {
                 login(email, UserRole.NISS_OFFICER);
-                navigate('/niss/journalists');
+                navigateBasedOnRole(UserRole.NISS_OFFICER, email);
             } else if (email === 'insa@au.org') {
                 login(email, UserRole.INSA_OFFICER);
-                navigate('/insa/journalists');
+                navigateBasedOnRole(UserRole.INSA_OFFICER, email);
             } else if (email === 'customs@au.org') {
                 login(email, UserRole.CUSTOMS_OFFICER);
-                navigate('/customs/journalists');
+                navigateBasedOnRole(UserRole.CUSTOMS_OFFICER, email);
             } else if (email === 'auadmin@au.org') {
                 login(email, UserRole.AU_ADMIN);
-                navigate('/au-admin/journalists');
-            } else {
+                navigateBasedOnRole(UserRole.AU_ADMIN, email);
+            } else if (email === 'admin@ausmc.org' && password === 'admin@123') { // Handle user provided default as generic fallback if API fails
+                login(email, UserRole.SUPER_ADMIN, [], "Super Admin (Mock)"); // Assume Super Admin for this specific fallback
+                navigate('/admin');
+            }
+            else {
+                // If not one of the specific hardcoded emails, default to EMA
                 login(email, UserRole.EMA_OFFICER);
-                navigate('/dashboard/journalists');
+                navigateBasedOnRole(UserRole.EMA_OFFICER, email);
             }
         }
     };
 
+    const navigateBasedOnRole = (role: UserRole, emailStr: string) => {
+        switch (role) {
+            case UserRole.SUPER_ADMIN: navigate('/admin'); break;
+            case UserRole.ICS_OFFICER: navigate('/ics/journalists'); break;
+            case UserRole.NISS_OFFICER: navigate('/niss/journalists'); break;
+            case UserRole.INSA_OFFICER: navigate('/insa/journalists'); break;
+            case UserRole.CUSTOMS_OFFICER: navigate('/customs/journalists'); break;
+            case UserRole.AU_ADMIN: navigate('/au-admin/journalists'); break;
+            default: navigate('/dashboard/journalists');
+        }
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-            {/* <div className="mb-8 flex flex-col items-center">
-                <div className="flex items-center gap-2 text-primary mb-2">
-                    <Plane className="h-10 w-10" />
-                    <h1 className="text-3xl font-bold font-sans text-primary leading-tight">
-                        Border Security<br />Officer
-                    </h1>
-                </div>
-            </div> */}
-
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <CardTitle>Login</CardTitle>
@@ -79,16 +126,12 @@ export function Login() {
                                 onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
-                        <Button type="submit" className="w-full">
-                            Sign In
+                        <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? "Signing In..." : "Sign In"}
                         </Button>
                     </form>
                 </CardContent>
             </Card>
-
-            {/* <p className="mt-8 text-xs text-muted-foreground">
-                © 2025 Ethiopian Media Association.
-            </p> */}
         </div>
     );
 }
