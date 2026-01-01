@@ -20,6 +20,8 @@ import { OrganizationManagement } from './pages/dashboard/OrganizationManagement
 import { WorkflowBuilder } from './pages/dashboard/WorkflowBuilder';
 import { PermissionManagement } from './pages/dashboard/PermissionManagement';
 import { RoleManagement } from './pages/dashboard/RoleManagement';
+import { InvitationTemplates } from './pages/dashboard/InvitationTemplates';
+import { InvitationManagement } from './pages/dashboard/InvitationManagement';
 import { Toaster } from 'sonner';
 
 import { useEffect } from 'react';
@@ -59,6 +61,8 @@ function App() {
                                     <Route path="badge-templates" element={<BadgeTemplates />} />
                                     <Route path="settings" element={<SystemSettings />} />
                                     <Route path="organizations" element={<OrganizationManagement />} />
+                                    <Route path="invitation-templates" element={<InvitationTemplates />} />
+                                    <Route path="invitations" element={<InvitationManagement />} />
                                     <Route path="workflow" element={<WorkflowBuilder />} />
                                     <Route path="permissions" element={<PermissionManagement />} />
                                     <Route path="roles" element={<RoleManagement />} />

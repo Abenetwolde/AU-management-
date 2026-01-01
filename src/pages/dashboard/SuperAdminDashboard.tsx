@@ -3,109 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, CheckCircle, Clock, XCircle, Calendar, ChevronDown,
-  Filter, Globe, Building2, Volume2, Plane, Shield, TrendingUp, Factory,
-  LayoutDashboard, FileText, Settings, LogOut, Search, Menu, Bell, Package, Download, CalendarDays
+  Filter, Building2, Volume2, Plane, Shield, TrendingUp, Factory,
+  FileText, Package, Download, CalendarDays, LayoutDashboard, Eye
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend, BarChart, Bar } from 'recharts';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import {
+  useGetDashboardFormsQuery,
+  useGetDashboardDataQuery,
+  useGetUsersQuery,
+  useGetOrganizationsQuery,
+  useGetApplicationsQuery
+} from '@/store/services/api';
 
 // --- UTILITY ---
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- EVENTS DATA ---
-const events = [
-  { id: "all", name: "All Events", date: "" },
-  { id: "au-summit-2025", name: "African Union Summit 2025", date: "2025-01-15" },
-  { id: "media-forum-2025", name: "Media Forum 2025", date: "2025-02-20" },
-  { id: "peace-conference", name: "Peace & Security Conference", date: "2025-03-10" },
-  { id: "economic-forum", name: "Economic Development Forum", date: "2025-04-05" },
-  { id: "youth-summit", name: "African Youth Summit", date: "2025-05-12" },
-  { id: "climate-summit", name: "Climate Action Summit", date: "2025-06-18" },
-];
-
-// --- DATA ---
-const dashboardData = {
-  filters: {
-    date: "MM/DD/YYYY",
-    organization: "All organization",
-    journalistCountry: "All Country",
-    status: "All status",
-    event: "All Events"
-  },
-  keyMetrics: {
-    totalRegistered: { value: 115, label: "Total Registered Journalists", trend: "up" },
-    fullyAccredited: { value: 102, label: "Fully Accredited", progress: 88.7 },
-    pendingApproval: { value: 9, label: "Pending Approval" },
-    totalRejected: { value: 5, label: "Total Rejected", percentage: 1.2 }
-  },
-  journalistStatus: {
-    rejected: { value: 38, percentage: 38, color: "#ef4444" },
-    approved: { value: 38, percentage: 38, color: "#3b82f6" },
-    pending: { value: 25, percentage: 25, color: "#94a3b8" }
-  },
-  mediaOrganizationType: [
-    { name: "Foreign Media", count: 17, color: "#3b82f6" },
-    { name: "AU Member State Media", count: 22, color: "#8b5cf6" },
-    { name: "NGO / Int. Org", count: 3, color: "#f97316" },
-    { name: "Others", count: 2, color: "#000000" }
-  ],
-  countries: [
-    { name: "USA", count: 12, color: "#f97316", code: "USA" },
-    { name: "UK", count: 10, color: "#a855f7", code: "GBR" },
-    { name: "Nigeria", count: 7, color: "#3b82f6", code: "NGA" },
-    { name: "South Africa", count: 5, color: "#22c55e", code: "ZAF" },
-    { name: "Cairo", count: 5, color: "#ef4444", code: "EGY" }
-  ],
-  allCountries: [
-    "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
-    "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan",
-    "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
-    "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica",
-    "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt",
-    "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon",
-    "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana",
-    "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel",
-    "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan",
-    "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar",
-    "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia",
-    "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal",
-    "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan",
-    "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar",
-    "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia",
-    "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa",
-    "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan",
-    "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan",
-    "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City",
-    "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"
-  ],
-  decisionsAndApprovals: [
-    { authority: "Ethiopian Media Authority", icon: "speaker", approved: 101, rejected: 12, color: "#ec4899" },
-    { authority: "Customs", icon: "package", approved: 101, rejected: 12, color: "#ec4899" },
-    { authority: "INSA", icon: "building", approved: 101, rejected: 12, color: "#22c55e" },
-    { authority: "Immigration and Citizenship Services", icon: "airplane", visaGranted: 100, visaDenied: 4, color: "#22c55e" },
-    { authority: "Border Security Officer", icon: "shield", allowedEntry: 92, deniedEntry: 0, color: "#ef4444" }
-  ],
-  journalistsEntered: [
-    { date: "2025-12-22", day: "Monday", total: 45, foreign: 12 },
-    { date: "2025-12-23", day: "Tuesday", total: 52, foreign: 15 },
-    { date: "2025-12-24", day: "Wednesday", total: 38, foreign: 8 },
-    { date: "2025-12-25", day: "Thursday", total: 65, foreign: 25 }, // Users requested specific date example
-    { date: "2025-12-26", day: "Friday", total: 48, foreign: 18 },
-    { date: "2025-12-27", day: "Saturday", total: 25, foreign: 5 },
-    { date: "2025-12-28", day: "Sunday", total: 30, foreign: 7 }
-  ],
-  months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]
-};
-
 // --- CONSTANTS ---
 const GEO_URL = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson";
-const countryDataMap = new Map(dashboardData.countries.map(c => [c.code, c]));
+
 
 // --- UI COMPONENTS ---
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
@@ -173,11 +95,45 @@ export default function SuperAdminDashboard() {
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [mounted, setMounted] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<string>("all");
+  const [selectedForm, setSelectedForm] = useState<string>("all");
+
+  // Dashboard Data
+  const { data: forms = [] } = useGetDashboardFormsQuery();
+  const { data: dashboardData, isLoading: isDashboardLoading, isError: isDashboardError } = useGetDashboardDataQuery({
+    formName: selectedForm === 'all' ? undefined : selectedForm
+  });
+
+  // Additional System Data
+  const { data: users = [] } = useGetUsersQuery();
+  const { data: organizations = [] } = useGetOrganizationsQuery();
+  const { data: appsData } = useGetApplicationsQuery({ page: 1, limit: 10 });
+  const recentApplications = appsData?.applications || [];
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  if (!mounted) return null;
+
+  const isLoading = isDashboardLoading;
+  const isError = isDashboardError || !dashboardData;
+
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
+      <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-slate-600 font-medium">Loading command center...</p>
+    </div>
+  );
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
+      <div className="p-4 bg-red-100 text-red-600 rounded-full">
+        <XCircle className="h-12 w-12" />
+      </div>
+      <p className="text-slate-600 font-medium">Error loading dashboard data. Please try again.</p>
+      <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
+    </div>
+  );
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev * 1.3, 8));
   const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.3, 1));
@@ -189,6 +145,8 @@ export default function SuperAdminDashboard() {
   ];
 
   const orgTotal = dashboardData.mediaOrganizationType.reduce((sum, org) => sum + org.count, 0);
+
+  const countryDataMap = new Map(dashboardData.countries.map(c => [c.code, c]));
 
   const getIcon = (iconName: string) => {
     switch (iconName) {
@@ -224,17 +182,14 @@ export default function SuperAdminDashboard() {
 
   // Export to CSV function
   const exportToCSV = () => {
+    if (!dashboardData) return;
     const csvData: string[] = [];
-    const selectedEventData = events.find(e => e.id === selectedEvent);
-    const eventName = selectedEventData?.name || 'All Events';
+    const formName = dashboardData.form?.name || 'All Forms';
 
     // Header
     csvData.push('Dashboard Report - Media Accreditation Portal');
     csvData.push(`Generated: ${new Date().toLocaleString()}`);
-    csvData.push(`Event Filter: ${eventName}`);
-    if (selectedEventData?.date) {
-      csvData.push(`Event Date: ${selectedEventData.date}`);
-    }
+    csvData.push(`Form Filter: ${formName}`);
     csvData.push('');
 
     // Key Metrics
@@ -297,8 +252,8 @@ export default function SuperAdminDashboard() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    const eventSlug = selectedEventData?.name.replace(/\s+/g, '-').toLowerCase() || 'all-events';
-    link.setAttribute('download', `dashboard-report-${eventSlug}-${new Date().toISOString().split('T')[0]}.csv`);
+    const formSlug = formName.replace(/\s+/g, '-').toLowerCase();
+    link.setAttribute('download', `dashboard-report-${formSlug}-${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -307,10 +262,10 @@ export default function SuperAdminDashboard() {
 
   // Export to PDF function
   const exportToPDF = () => {
+    if (!dashboardData) return;
     const doc = new jsPDF();
     let yPos = 20;
-    const selectedEventData = events.find(e => e.id === selectedEvent);
-    const eventName = selectedEventData?.name || 'All Events';
+    const formName = dashboardData.form?.name || 'All Forms';
 
     // Title
     doc.setFontSize(18);
@@ -318,20 +273,14 @@ export default function SuperAdminDashboard() {
     doc.text('Dashboard Report - Media Accreditation Portal', 14, yPos);
     yPos += 10;
 
-    // Date and Event Filter
+    // Date and Form Filter
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, yPos);
     yPos += 7;
     doc.setFont('helvetica', 'bold');
-    doc.text(`Event Filter: ${eventName}`, 14, yPos);
-    yPos += 7;
-    if (selectedEventData?.date) {
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Event Date: ${selectedEventData.date}`, 14, yPos);
-      yPos += 7;
-    }
-    yPos += 8;
+    doc.text(`Form Filter: ${formName}`, 14, yPos);
+    yPos += 15;
 
     // Key Metrics Table
     doc.setFontSize(14);
@@ -468,8 +417,8 @@ export default function SuperAdminDashboard() {
     });
 
     // Save PDF
-    const eventSlug = selectedEventData?.name.replace(/\s+/g, '-').toLowerCase() || 'all-events';
-    doc.save(`dashboard-report-${eventSlug}-${new Date().toISOString().split('T')[0]}.pdf`);
+    const formSlug = formName.replace(/\s+/g, '-').toLowerCase();
+    doc.save(`dashboard-report-${formSlug}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   if (!mounted) return null;
@@ -477,7 +426,7 @@ export default function SuperAdminDashboard() {
   return (
     <div className="font-sans min-h-screen bg-slate-50/50 flex text-slate-600">
       {/* INJECTED STYLES */}
-      <style jsx global>{`
+      <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
                 
                 body {
@@ -517,6 +466,48 @@ export default function SuperAdminDashboard() {
       {/* Main Content */}
       <main className="flex-1 min-w-0">
         <div className="p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in">
+          {/* System Summary (Admin/Org counts) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up" style={{ animationDelay: '0.05s' }}>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-500 to-blue-600 text-white overflow-hidden relative group">
+              <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform">
+                <Shield className="h-24 w-24" />
+              </div>
+              <CardContent className="p-6 relative">
+                <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">System Administrators</p>
+                <div className="flex items-end gap-3">
+                  <h3 className="text-4xl font-bold">{users.length}</h3>
+                  <span className="text-white/60 text-sm mb-1 font-medium">Active Users</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-teal-600 text-white overflow-hidden relative group">
+              <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform">
+                <Building2 className="h-24 w-24" />
+              </div>
+              <CardContent className="p-6 relative">
+                <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">Partner Organizations</p>
+                <div className="flex items-end gap-3">
+                  <h3 className="text-4xl font-bold">{organizations.length}</h3>
+                  <span className="text-white/60 text-sm mb-1 font-medium">Registered</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-700 to-slate-900 text-white overflow-hidden relative group">
+              <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform">
+                <LayoutDashboard className="h-24 w-24" />
+              </div>
+              <CardContent className="p-6 relative">
+                <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">Total Active Roles</p>
+                <div className="flex items-end gap-3">
+                  <h3 className="text-4xl font-bold">12</h3>
+                  <span className="text-white/60 text-sm mb-1 font-medium">Defined Roles</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Export Buttons with Event Filter */}
           <div className="flex items-center justify-end gap-3 mb-4">
             {/* Event Selector */}
@@ -524,13 +515,14 @@ export default function SuperAdminDashboard() {
               <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2.5 bg-white min-w-[280px] hover:border-blue-400 transition-colors">
                 <CalendarDays className="h-4 w-4 text-blue-500 flex-shrink-0" />
                 <select
-                  value={selectedEvent}
-                  onChange={(e) => setSelectedEvent(e.target.value)}
+                  value={selectedForm}
+                  onChange={(e) => setSelectedForm(e.target.value)}
                   className="appearance-none border-0 outline-none text-sm flex-1 bg-transparent text-slate-700 font-medium cursor-pointer"
                 >
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.name}
+                  <option value="all">All Forms</option>
+                  {forms.map((form) => (
+                    <option key={form.id} value={form.name}>
+                      {form.name}
                     </option>
                   ))}
                 </select>
@@ -565,26 +557,25 @@ export default function SuperAdminDashboard() {
                   <Calendar className="h-4 w-4 text-blue-500" />
                   <input
                     type="date"
-                    placeholder={dashboardData.filters.date}
+                    placeholder="MM/DD/YYYY"
                     className="border-0 outline-none text-sm flex-1 bg-transparent text-slate-600 font-medium"
                   />
                 </div>
 
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[220px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
-                    <option>{dashboardData.filters.organization}</option>
-                    <option>Foreign Media</option>
-                    <option>AU Member State Media</option>
-                    <option>NGO / Int. Org</option>
-                    <option>Others</option>
+                    <option>All organizations</option>
+                    {dashboardData.filterOptions.organizations.map((org, i) => (
+                      <option key={i} value={org}>{org}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
                 </div>
 
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[220px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
-                    <option>{dashboardData.filters.journalistCountry}</option>
-                    {dashboardData.allCountries.map((country, i) => (
+                    <option>All Countries</option>
+                    {dashboardData.filterOptions.countries.map((country, i) => (
                       <option key={i} value={country}>{country}</option>
                     ))}
                   </select>
@@ -593,10 +584,10 @@ export default function SuperAdminDashboard() {
 
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[200px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
-                    <option>{dashboardData.filters.status}</option>
-                    <option>Approved</option>
-                    <option>Pending</option>
-                    <option>Rejected</option>
+                    <option>All status</option>
+                    {dashboardData.filterOptions.statuses.map((status, i) => (
+                      <option key={i} value={status}>{status}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
                 </div>
@@ -827,17 +818,38 @@ export default function SuperAdminDashboard() {
                       <div className="text-sm font-bold text-slate-900">{hoveredCountry || "Hover a country"}</div>
                     </div>
                   </div>
-                  <div className="space-y-3 flex-shrink-0 w-40">
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Top Countries</div>
-                    {dashboardData.countries.map((country, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: country.color }} />
-                          <span className="text-sm font-semibold text-slate-700">{country.name}</span>
-                        </div>
-                        <span className="text-sm font-bold text-slate-900">{country.count}</span>
-                      </div>
-                    ))}
+                  <div className="space-y-3 flex-shrink-0 w-64">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Top Nationalities</div>
+                    <div className="h-[200px] w-full mt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dashboardData.countries.slice(0, 5)} layout="vertical" margin={{ left: -20, right: 10, top: 0, bottom: 0 }}>
+                          <XAxis type="number" hide />
+                          <YAxis
+                            dataKey="name"
+                            type="category"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }}
+                            width={70}
+                          />
+                          <Tooltip
+                            cursor={{ fill: 'transparent' }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className="bg-white border p-2 rounded-lg shadow-sm text-xs border-slate-100">
+                                    <p className="font-bold">{payload[0].payload.name}</p>
+                                    <p className="text-blue-600">{payload[0].value} Journalists</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={12} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -1038,6 +1050,78 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Recent Applications Feed */}
+          <div className="animate-slide-up" style={{ animationDelay: '0.5s' }}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-800">Recent Applications Feed</h2>
+              <Button variant="link" className="text-blue-600 font-bold" onClick={() => window.location.href = '/dashboard/journalists'}>
+                View All Applications
+              </Button>
+            </div>
+            <Card className="border-0 shadow-sm overflow-hidden bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/50">
+                    <tr>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Journalist</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Organization</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">View</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentApplications.map((app) => (
+                      <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                              {app.user?.fullName?.charAt(0) || 'J'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{app.user?.fullName || 'Anonymous'}</p>
+                              <p className="text-xs text-slate-400">{app.formData?.country || app.user?.country || 'N/A'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-semibold text-slate-600">{app.formData?.organization_name || 'Individual'}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${app.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600' :
+                            app.status === 'REJECTED' ? 'bg-red-50 text-red-600' :
+                              'bg-amber-50 text-amber-600'
+                            }`}>
+                            <div className={`h-1.5 w-1.5 rounded-full ${app.status === 'APPROVED' ? 'bg-emerald-500' :
+                              app.status === 'REJECTED' ? 'bg-red-500' :
+                                'bg-amber-500'
+                              }`} />
+                            {app.status || 'PENDING'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-medium text-slate-500">{new Date(app.createdAt).toLocaleDateString()}</p>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 group-hover:scale-110 transition-transform" onClick={() => window.location.href = `/dashboard/journalists/${app.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {recentApplications.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm font-medium">
+                          No recent applications to display.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
 
           {/* Footer */}

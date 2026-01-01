@@ -120,7 +120,7 @@ export function SystemSettings() {
         const formData = new FormData();
         formData.append('heroMotto', settings.heroMotto);
         formData.append('description', settings.description);
-        formData.append('privacyPolicyContent', settings.privacyPolicyContent);
+
         formData.append('contactEmail', settings.contactEmail);
         formData.append('contactLink', settings.contactLink);
 
@@ -132,7 +132,7 @@ export function SystemSettings() {
         const enabledLangs = settings.languages
             .filter(l => l.enabled)
             .map(({ enabled, ...rest }) => rest);
-        formData.append('languages', JSON.stringify(enabledLangs));
+        // formData.append('languages', JSON.stringify(enabledLangs));
 
         // Append configs (parsing to ensure validity or sending as JSON string if API expects string)
         // Adjusting based on requirement "JSON objects" likely means parsing string back to obj before sending, 
@@ -156,7 +156,7 @@ export function SystemSettings() {
 
         if (mainLogo) formData.append('mainLogo', mainLogo);
         if (footerLogo) formData.append('footerLogo', footerLogo);
-        if (heroBackground) formData.append('heroBackground', heroBackground);
+        if (heroBackground) formData.append('heroBackgroundUrl', heroBackground);
 
         // Append Languages as JSON string
         formData.append('languages', JSON.stringify(settings.languages));
@@ -175,7 +175,7 @@ export function SystemSettings() {
         formData.append('processTrackerConfig', typeof settings.processTrackerConfig === 'string' ? settings.processTrackerConfig : JSON.stringify(settings.processTrackerConfig));
         formData.append('infoSectionConfig', typeof settings.infoSectionConfig === 'string' ? settings.infoSectionConfig : JSON.stringify(settings.infoSectionConfig));
         formData.append('footerConfig', typeof settings.footerConfig === 'string' ? settings.footerConfig : JSON.stringify(settings.footerConfig));
-
+        formData.append('privacyPolicyContent', settings.privacyPolicyContent);
         try {
             await createSettings(formData).unwrap();
             toast.success("Settings saved successfully");

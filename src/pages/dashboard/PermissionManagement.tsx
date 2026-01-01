@@ -21,6 +21,7 @@ import {
     useDeleteCategoryMutation,
     useTogglePermissionMutation,
     useBulkUpdatePermissionsMutation,
+    useDeletePermissionMutation, // Added
     Role,
     Permission,
     Category
@@ -180,6 +181,7 @@ export function PermissionManagement() {
     const [createPermission, { isLoading: isCreatingPerm }] = useCreatePermissionMutation();
     const [togglePermission] = useTogglePermissionMutation();
     const [bulkUpdatePermissions] = useBulkUpdatePermissionsMutation();
+    const [deletePermission] = useDeletePermissionMutation();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -282,12 +284,22 @@ export function PermissionManagement() {
         }
     };
 
+    const handleDeletePermission = async (id: number) => {
+        if (!confirm("Are you sure you want to delete this permission? This cannot be undone.")) return;
+        try {
+            await deletePermission(id).unwrap();
+            toast.success("Permission deleted");
+        } catch (err) {
+            toast.error("Failed to delete permission");
+        }
+    }
+
     if (matrixLoading) {
         return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     }
 
     return (
-        <div className="space-y-6 max-w-[1600px] mx-auto p-6 h-[calc(100vh-2rem)] flex flex-col">
+        <div className="space-y-6 w-full p-6 flex flex-col w-[70%] h-[40%] " >
             <div className="flex justify-between items-center shrink-0">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Access Control Matrix</h1>
@@ -353,7 +365,7 @@ export function PermissionManagement() {
                 </div>
             </div>
 
-            <Card className="flex-1 flex flex-col min-h-0 h-[1000px] overflow-hidden">
+            <Card className="flex-1 flex flex-col ">
                 <CardHeader className="py-4 border-b bg-gray-50/50 shrink-0">
                     <div className="flex justify-between items-center gap-4">
                         <div className="flex items-center gap-4">
@@ -386,10 +398,10 @@ export function PermissionManagement() {
                     </div>
                 </CardHeader>
 
-                <CardContent className="p-0 overflow-auto">
+                <CardContent className="p-0 overflow-x-auto">
                     <div className="min-w-max">
                         {/* Sticky Header */}
-                        <div className="sticky top-0 z-10 bg-white border-b shadow-sm grid grid-cols-[300px_1fr]">
+                        <div className="sticky top-0 z-10 bg-white border-b shadow-sm grid grid-cols-[300px_1fr_60px]">
                             <div className="p-4 font-bold text-sm bg-gray-50 border-r flex items-center">
                                 Resource / Action
                             </div>
@@ -400,6 +412,9 @@ export function PermissionManagement() {
                                         <span className="text-[10px] text-muted-foreground font-normal">{role.organization?.name || 'System'}</span>
                                     </div>
                                 ))}
+                            </div>
+                            <div className="p-4 font-bold text-sm bg-gray-50 border-l flex items-center justify-center">
+                                Action
                             </div>
                         </div>
 
@@ -449,7 +464,7 @@ export function PermissionManagement() {
 
                                         {/* Rows */}
                                         {!isCollapsed && perms.map(item => (
-                                            <div key={item.id} className="grid grid-cols-[300px_1fr] hover:bg-slate-50 group">
+                                            <div key={item.id} className="grid grid-cols-[300px_1fr_60px] hover:bg-slate-50 group">
                                                 <div className="p-3 pl-10 border-r flex flex-col justify-center">
                                                     <div className="flex items-center gap-2">
                                                         <div className="font-medium text-sm text-gray-700 font-mono truncate" title={item.key}>{item.key}</div>
@@ -470,6 +485,11 @@ export function PermissionManagement() {
                                                             </div>
                                                         );
                                                     })}
+                                                </div>
+                                                <div className="p-3 border-l flex justify-center items-center">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => handleDeletePermission(item.id)}>
+                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                    </Button>
                                                 </div>
                                             </div>
                                         ))}

@@ -6,7 +6,7 @@ import {
     Check,
     Eye,
     Palette,
-    QrCode,
+    FileText,
     Printer,
     Settings2,
     Layout,
@@ -14,14 +14,15 @@ import {
     Save,
     Trash2,
     X,
+    Mail,
 } from 'lucide-react';
 import {
-    useGetBadgeTemplatesQuery,
-    useUpdateBadgeTemplateMutation,
-    useDeleteBadgeTemplateMutation,
-    useCreateBadgeTemplateMutation,
-    BadgeTemplate,
-    CreateBadgeTemplatePayload,
+    useGetInvitationTemplatesQuery,
+    useUpdateInvitationTemplateMutation,
+    useDeleteInvitationTemplateMutation,
+    useCreateInvitationTemplateMutation,
+    InvitationTemplate,
+    CreateInvitationTemplatePayload,
 } from '@/store/services/api';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
@@ -44,26 +45,37 @@ const interpolateTemplate = (content: string, variables: Record<string, string>)
 const MOCK_VARS = {
     userName: "JOHN DOE",
     organization: "AFRICAN UNION",
-    badgeType: "DELEGATE",
-    referenceNumber: "AU-2025-001",
+    eventTitle: "38th AU Summit",
+    eventDate: "Feb 15-16, 2025",
+    venue: "Addis Ababa, Ethiopia",
+    referenceNumber: "INV-2025-0812",
 };
 
-export function BadgeTemplates() {
-    const { data: templates, isLoading } = useGetBadgeTemplatesQuery();
-    const [updateTemplate] = useUpdateBadgeTemplateMutation();
-    const [createTemplate] = useCreateBadgeTemplateMutation();
-    const [deleteTemplate] = useDeleteBadgeTemplateMutation();
+export function InvitationTemplates() {
+    const { data: templates, isLoading } = useGetInvitationTemplatesQuery();
+    const [updateTemplate] = useUpdateInvitationTemplateMutation();
+    const [createTemplate] = useCreateInvitationTemplateMutation();
+    const [deleteTemplate] = useDeleteInvitationTemplateMutation();
 
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [newTemplate, setNewTemplate] = useState<Partial<CreateBadgeTemplatePayload>>({
+    const [newTemplate, setNewTemplate] = useState<Partial<CreateInvitationTemplatePayload>>({
         name: '',
         description: '',
-        htmlContent: '',
-        cssStyles: '',
-        badgeType: 'Standard',
-        width: 337,
-        height: 512,
-        dynamicVariables: ['userName', 'badgeType', 'organization', 'referenceNumber'],
+        htmlContent: `<div style="padding: 40px; font-family: sans-serif; line-height: 1.6;">
+    <h1 style="text-align: center; color: #007a3d;">OFFICIAL INVITATION</h1>
+    <div style="margin-top: 40px;">
+        <p>Dear <strong>{{userName}}</strong>,</p>
+        <p>On behalf of the <strong>{{organization}}</strong>, we are pleased to invite you to the <strong>{{eventTitle}}</strong>.</p>
+        <p>This event will take place on {{eventDate}} at {{venue}}.</p>
+        <div style="margin-top: 40px; padding: 20px; background: #f9f9f9; border-left: 4px solid #007a3d;">
+            <p><strong>Reference Number:</strong> {{referenceNumber}}</p>
+        </div>
+        <p style="margin-top: 40px;">Sincerely,</p>
+        <div style="margin-top: 20px; font-weight: bold;">EMA Accreditation Team</div>
+    </div>
+</div>`,
+        cssStyles: `body { background-color: white; }`,
+        dynamicVariables: ['userName', 'eventTitle', 'organization', 'referenceNumber', 'eventDate', 'venue'],
     });
 
     // Local state for editing cards
@@ -108,8 +120,8 @@ export function BadgeTemplates() {
 
     const handleCreate = async () => {
         try {
-            await createTemplate(newTemplate as CreateBadgeTemplatePayload).unwrap();
-            toast.success("Badge template created");
+            await createTemplate(newTemplate as CreateInvitationTemplatePayload).unwrap();
+            toast.success("Invitation template created");
             setIsAddOpen(false);
         } catch (err) {
             toast.error("Failed to create template");
@@ -122,31 +134,25 @@ export function BadgeTemplates() {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold font-sans text-gray-900">Badge Templates</h2>
-                    <p className="text-sm text-gray-500 mt-1">Manage event badge designs with live rendering and code editing</p>
+                    <h2 className="text-3xl font-bold font-sans text-gray-900">Invitation Templates</h2>
+                    <p className="text-sm text-gray-500 mt-1">Manage official invitation letters for approved applicants</p>
                 </div>
                 <div className="flex gap-3">
                     <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                         <DialogTrigger asChild>
-                            <Button className="bg-[#009b4d] hover:bg-[#007a3d] gap-2 shadow-md">
+                            <Button className="bg-blue-600 hover:bg-blue-700 gap-2 shadow-md">
                                 <Plus className="h-4 w-4" />
                                 New Template
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle>Create New Badge Template</DialogTitle>
+                                <DialogTitle>Create Invitation Template</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4 py-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Name</Label>
-                                        <Input value={newTemplate.name} onChange={e => setNewTemplate({ ...newTemplate, name: e.target.value })} placeholder="e.g. VIP Badge" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Badge Type</Label>
-                                        <Input value={newTemplate.badgeType} onChange={e => setNewTemplate({ ...newTemplate, badgeType: e.target.value })} placeholder="e.g. VIP" />
-                                    </div>
+                                <div className="space-y-2">
+                                    <Label>Template Name</Label>
+                                    <Input value={newTemplate.name} onChange={e => setNewTemplate({ ...newTemplate, name: e.target.value })} placeholder="e.g. AU Summit Official Letter" />
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Description</Label>
@@ -160,14 +166,14 @@ export function BadgeTemplates() {
                                     <Label>CSS Styles</Label>
                                     <Textarea className="font-mono h-32" value={newTemplate.cssStyles} onChange={e => setNewTemplate({ ...newTemplate, cssStyles: e.target.value })} />
                                 </div>
-                                <Button onClick={handleCreate} className="w-full bg-[#009b4d]">Create Template</Button>
+                                <Button onClick={handleCreate} className="w-full bg-blue-600">Create Template</Button>
                             </div>
                         </DialogContent>
                     </Dialog>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2 gap-8">
                 {templates?.map((template) => {
                     const localState = editStates[template.id] || { isCode: false, html: template.htmlContent, css: template.cssStyles };
 
@@ -175,7 +181,7 @@ export function BadgeTemplates() {
                         <div key={template.id} className="space-y-4">
                             <Card className={cn(
                                 "relative overflow-hidden transition-all duration-500 border-0 shadow-xl bg-white",
-                                template.isDefault ? "ring-2 ring-green-500" : ""
+                                template.isDefault ? "ring-2 ring-blue-500" : ""
                             )}>
                                 <div className="p-4 border-b flex items-center justify-between bg-slate-50/50">
                                     <div>
@@ -206,7 +212,7 @@ export function BadgeTemplates() {
 
                                 <CardContent className="p-0">
                                     {localState.isCode ? (
-                                        <div className="flex flex-col h-[512px]">
+                                        <div className="flex flex-col h-[600px]">
                                             <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto bg-slate-900 text-white">
                                                 <div className="space-y-1">
                                                     <div className="flex items-center justify-between">
@@ -214,7 +220,7 @@ export function BadgeTemplates() {
                                                         <Code className="h-3 w-3 text-slate-500" />
                                                     </div>
                                                     <Textarea
-                                                        className="font-mono text-xs bg-slate-800 border-slate-700 h-48 focus:ring-blue-500"
+                                                        className="font-mono text-xs bg-slate-800 border-slate-700 h-64 focus:ring-blue-500"
                                                         value={localState.html}
                                                         onChange={e => setEditStates(prev => ({ ...prev, [template.id]: { ...(prev[template.id] || localState), html: e.target.value } }))}
                                                     />
@@ -225,7 +231,7 @@ export function BadgeTemplates() {
                                                         <Palette className="h-3 w-3 text-slate-500" />
                                                     </div>
                                                     <Textarea
-                                                        className="font-mono text-xs bg-slate-800 border-slate-700 h-48 focus:ring-blue-500"
+                                                        className="font-mono text-xs bg-slate-800 border-slate-700 h-64 focus:ring-blue-500"
                                                         value={localState.css}
                                                         onChange={e => setEditStates(prev => ({ ...prev, [template.id]: { ...(prev[template.id] || localState), css: e.target.value } }))}
                                                     />
@@ -233,24 +239,21 @@ export function BadgeTemplates() {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center bg-slate-100/50 p-8 h-[512px] overflow-auto">
+                                        <div className="flex flex-col items-center justify-start bg-slate-200/50 p-8 h-[600px] overflow-auto">
                                             <div
-                                                className="shadow-2xl bg-white origin-top"
+                                                className="shadow-2xl bg-white origin-top p-[1in]"
                                                 style={{
-                                                    transform: `scale(${template.width > 350 ? 0.7 : 0.85})`,
-                                                    width: `${template.width}px`,
-                                                    height: `${template.height}px`,
+                                                    transform: `scale(0.6)`,
+                                                    width: `8.5in`,
+                                                    height: `11in`,
                                                     flexShrink: 0
                                                 }}
                                             >
                                                 <style dangerouslySetInnerHTML={{ __html: localState.css }} />
                                                 <div
-                                                    className="badge-preview-content h-full w-full overflow-hidden"
+                                                    className="invitation-preview-content h-full w-full overflow-hidden"
                                                     dangerouslySetInnerHTML={{
-                                                        __html: interpolateTemplate(localState.html, {
-                                                            ...MOCK_VARS,
-                                                            badgeType: template.badgeType || "MEMBER"
-                                                        })
+                                                        __html: interpolateTemplate(localState.html, MOCK_VARS)
                                                     }}
                                                 />
                                             </div>
@@ -258,8 +261,8 @@ export function BadgeTemplates() {
                                     )}
                                 </CardContent>
                                 {template.isDefault && (
-                                    <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg shadow-sm">
-                                        ACTIVE
+                                    <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg shadow-sm">
+                                        DEFAULT
                                     </div>
                                 )}
                             </Card>
@@ -268,9 +271,9 @@ export function BadgeTemplates() {
                                 <Button
                                     onClick={() => updateTemplate({ id: template.id, data: { isDefault: true } })}
                                     variant="outline"
-                                    className="w-full hover:bg-green-50 hover:text-green-700 hover:border-green-200 border-gray-200"
+                                    className="w-full hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border-gray-200"
                                 >
-                                    Set as Default Template
+                                    Set as Default Invitation
                                 </Button>
                             )}
                         </div>
@@ -280,10 +283,10 @@ export function BadgeTemplates() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-4">
                 {[
-                    { label: 'Security Level', value: 'High', icon: Settings2 },
-                    { label: 'Templates', value: `${templates?.length || 0} Total`, icon: Palette },
-                    { label: 'Dynamic Vars', value: '4 Support', icon: QrCode },
-                    { label: 'Preview DPI', value: '300 DPI', icon: Printer }
+                    { label: 'Document Type', value: 'PDF / A4', icon: FileText },
+                    { label: 'Active Letter', value: templates?.find(t => t.isDefault)?.name || 'None', icon: Mail },
+                    { label: 'Dynamic Fields', value: '6 Supported', icon: Palette },
+                    { label: 'Security', value: 'Watermarked', icon: Settings2 }
                 ].map((stat, i) => (
                     <Card key={i} className="bg-white border-gray-100 shadow-sm">
                         <CardContent className="p-4 flex items-center gap-4">
@@ -292,7 +295,7 @@ export function BadgeTemplates() {
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stat.label}</p>
-                                <p className="text-sm font-bold text-gray-900">{stat.value}</p>
+                                <p className="text-sm font-bold text-gray-900 line-clamp-1">{stat.value}</p>
                             </div>
                         </CardContent>
                     </Card>

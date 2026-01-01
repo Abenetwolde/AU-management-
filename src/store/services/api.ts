@@ -206,70 +206,140 @@ export interface EmailTemplatesResponse {
     };
 }
 
-// Workflow Configuration Types
-export interface WorkflowConfig {
+// Workflow Types
+export interface WorkflowStep {
     id: number;
-    step: string;
-    dependencyType: 'ALL' | 'ANY' | 'NONE';
-    dependsOn: string[];
-    isActive: boolean;
-    requiredPermission: string;
+    name: string;
+    key: string; // Unique identifier like 'immigration_check'
     description: string;
-    order: number;
+    displayOrder: number;
+    isActive: boolean;
+    requiredRole: string | 'ICS' | 'SECURITY_OFFICER' | 'CUSTOM_OFFICER' | 'INSA_OFFICER' | 'MEDIA_LIAISON';
+    formId: number | null;
+    icon: string | null;
+    color: string | null; // Hex color code
+    dependencyType: 'ALL' | 'ANY' | 'NONE';
+    dependsOn: string[]; // Array of step KEYs that this step depends on
     createdAt: string;
     updatedAt: string;
 }
 
-export interface WorkflowConfigResponse {
-    success: boolean;
-    message: string;
-    data: WorkflowConfig[];
-}
-
-export interface SingleWorkflowConfigResponse {
-    success: boolean;
-    message: string;
-    data: WorkflowConfig;
-}
-
-export interface CreateWorkflowConfigPayload {
-    step: string;
+export interface CreateWorkflowStepPayload {
+    name: string;
+    key: string;
+    description: string;
+    displayOrder: number;
+    requiredRole: string;
+    formId: number | null;
+    icon: string | null;
+    color: string | null;
     dependencyType: 'ALL' | 'ANY' | 'NONE';
     dependsOn: string[];
-    requiredPermission: string;
-    isActive: boolean;
-    order: number;
-    description: string;
 }
 
-export interface BulkUpdateWorkflowPayload {
-    configurations: {
-        step: string;
-        dependencyType: 'ALL' | 'ANY' | 'NONE';
-        dependsOn: string[];
-        requiredPermission: string;
-        isActive: boolean;
-        order: number;
-        description?: string;
-    }[];
+export interface UpdateWorkflowStepPayload {
+    name?: string;
+    key?: string;
+    description?: string;
+    displayOrder?: number;
+    isActive?: boolean;
+    requiredRole?: string;
+    formId?: number | null;
+    icon?: string | null;
+    color?: string | null;
+    dependencyType?: 'ALL' | 'ANY' | 'NONE';
+    dependsOn?: string[];
 }
 
-export interface WorkflowBulkUpdateResponse {
+export interface BulkUpdateWorkflowStepsPayload {
+    steps: Partial<WorkflowStep>[];
+}
+
+// Response Wrappers
+export interface WorkflowStepsResponse {
     success: boolean;
     message: string;
-    data: {
-        results: {
-            step: string;
-            status: string;
-            config: WorkflowConfig;
-        }[];
-        errors: any[];
-        validation: {
-            hasCircularDependencies: boolean;
-            circularDependencies: string[];
-            recommendation: string;
-        };
-    };
+    data: WorkflowStep[];
+}
+
+export interface SingleWorkflowStepResponse {
+    success: boolean;
+    message: string;
+    data: WorkflowStep;
+}
+
+// Badge Templates
+export interface BadgeTemplate {
+    id: number;
+    name: string;
+    description: string;
+    htmlContent: string;
+    cssStyles: string;
+    badgeType: string;
+    logoUrl: string | null;
+    width: number;
+    height: number;
+    dynamicVariables: string; // JSON string array
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Invitation Templates
+export interface InvitationTemplate {
+    id: number;
+    name: string;
+    description: string | null;
+    htmlContent: string;
+    cssStyles: string;
+    dynamicVariables: string; // JSON string array
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateInvitationTemplatePayload {
+    name: string;
+    description?: string;
+    htmlContent: string;
+    cssStyles: string;
+    dynamicVariables: string[];
+    isDefault?: boolean;
+}
+
+export interface CreateBadgeTemplatePayload {
+    name: string;
+    description?: string;
+    htmlContent: string;
+    cssStyles: string;
+    badgeType: string;
+    logoUrl?: string | null;
+    width: number;
+    height: number;
+    dynamicVariables: string[];
+    isDefault?: boolean;
+}
+
+export interface SingleBadgeTemplateResponse {
+    success: boolean;
+    message: string;
+    data: BadgeTemplate;
+}
+
+export interface BadgeTemplatesResponse {
+    success: boolean;
+    message: string;
+    data: BadgeTemplate[];
+}
+
+// Form Type for selection in workflow step
+export interface Form {
+    form_id: number;
+    name: string;
+    type: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
 }
 
 // Responses
@@ -329,6 +399,99 @@ export interface OrganizationsResponse {
         currentPage: number;
         totalPages: number;
     };
+}
+
+export interface DashboardMetric {
+    value: number;
+    label: string;
+    trend?: 'up' | 'down' | 'stable';
+    progress?: number;
+    percentage?: number;
+}
+
+export interface DashboardKeyMetrics {
+    totalRegistered: DashboardMetric;
+    fullyAccredited: DashboardMetric;
+    pendingApproval: DashboardMetric;
+    totalRejected: DashboardMetric;
+}
+
+export interface DashboardStatus {
+    value: number;
+    percentage: number;
+    color: string;
+}
+
+export interface DashboardJournalistStatus {
+    approved: DashboardStatus;
+    rejected: DashboardStatus;
+    pending: DashboardStatus;
+}
+
+export interface DashboardOrgType {
+    name: string;
+    count: number;
+    color: string;
+}
+
+export interface DashboardCountry {
+    name: string;
+    count: number;
+    color: string;
+    code: string;
+}
+
+export interface DashboardAuthorityDecision {
+    authority: string;
+    icon: string;
+    approved?: number;
+    rejected?: number;
+    visaGranted?: number;
+    visaDenied?: number;
+    allowedEntry?: number;
+    deniedEntry?: number;
+    color: string;
+}
+
+export interface DashboardJournalistEntry {
+    date: string;
+    day: string;
+    total: number;
+    foreign: number;
+}
+
+export interface DashboardFilterOptions {
+    organizations: string[];
+    countries: string[];
+    statuses: string[];
+}
+
+export interface DashboardData {
+    form: { id: string; name: string } | null;
+    keyMetrics: DashboardKeyMetrics;
+    journalistStatus: DashboardJournalistStatus;
+    mediaOrganizationType: DashboardOrgType[];
+    countries: DashboardCountry[];
+    decisionsAndApprovals: DashboardAuthorityDecision[];
+    journalistsEntered: DashboardJournalistEntry[];
+    filterOptions: DashboardFilterOptions;
+}
+
+export interface DashboardForm {
+    id: string;
+    name: string;
+}
+
+export interface DashboardDataResponse {
+    success: boolean;
+    message: string;
+    data: DashboardData;
+}
+
+export interface DashboardFormsResponse {
+    success: boolean;
+    message: string;
+    data: DashboardForm[];
 }
 
 export interface UsersResponse {
@@ -396,7 +559,7 @@ export const api = createApi({
             return headers;
         },
     }),
-    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow'],
+    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow', 'Badge', 'Invitation'],
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, any>({
             query: (credentials) => ({
@@ -440,11 +603,18 @@ export const api = createApi({
             },
             providesTags: ['Category'],
         }),
-        createPermission: builder.mutation<Permission, Partial<Permission> & { categoryId: string | null }>({
+        createPermission: builder.mutation<Permission, Partial<Permission>>({
             query: (body) => ({
-                url: '/permissions/permissions',
+                url: '/permissions/resources',
                 method: 'POST',
                 body,
+            }),
+            invalidatesTags: ['Permission'],
+        }),
+        deletePermission: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/permissions/permissions/${id}`,
+                method: 'DELETE',
             }),
             invalidatesTags: ['Permission'],
         }),
@@ -659,32 +829,122 @@ export const api = createApi({
             }),
             invalidatesTags: ['LandingPage'],
         }),
-        // Workflow Configuration
-        getWorkflowConfigs: builder.query<WorkflowConfig[], void>({
-            query: () => '/workflow/config',
-            transformResponse: (response: WorkflowConfigResponse) => response.data,
+
+        // Workflow Steps
+        getWorkflowSteps: builder.query<WorkflowStep[], void>({
+            query: () => '/workflow-steps',
+            transformResponse: (response: WorkflowStepsResponse) => response.data,
             providesTags: ['Workflow'],
         }),
-        createWorkflowConfig: builder.mutation<WorkflowConfig, CreateWorkflowConfigPayload>({
+        createWorkflowStep: builder.mutation<WorkflowStep, CreateWorkflowStepPayload>({
             query: (body) => ({
-                url: '/workflow/config',
+                url: '/workflow-steps',
                 method: 'POST',
                 body,
             }),
             invalidatesTags: ['Workflow'],
         }),
-        getWorkflowConfigByStep: builder.query<WorkflowConfig, string>({
-            query: (step) => `/workflow/config/${step}`,
-            transformResponse: (response: SingleWorkflowConfigResponse) => response.data,
-            providesTags: (result, error, step) => [{ type: 'Workflow', id: step }],
+        updateWorkflowStep: builder.mutation<WorkflowStep, { id: number; data: UpdateWorkflowStepPayload }>({
+            query: ({ id, data }) => ({
+                url: `/workflow-steps/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Workflow'],
         }),
-        bulkUpdateWorkflowConfigs: builder.mutation<WorkflowBulkUpdateResponse, BulkUpdateWorkflowPayload>({
+        deleteWorkflowStep: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/workflow-steps/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Workflow'],
+        }),
+        bulkUpdateWorkflowSteps: builder.mutation<void, BulkUpdateWorkflowStepsPayload>({
             query: (body) => ({
-                url: '/workflow/config/bulk',
+                url: '/workflow-steps/bulk',
                 method: 'PUT',
                 body,
             }),
             invalidatesTags: ['Workflow'],
+        }),
+        // Forms (for selection in workflow)
+        getForms: builder.query<Form[], void>({
+            query: () => '/forms',
+            transformResponse: (response: { forms: Form[] }) => response.forms,
+        }),
+        // Badge Templates
+        getBadgeTemplates: builder.query<BadgeTemplate[], void>({
+            query: () => '/badges/templates',
+            transformResponse: (response: BadgeTemplatesResponse) => response.data,
+            providesTags: ['Badge'],
+        }),
+        createBadgeTemplate: builder.mutation<BadgeTemplate, CreateBadgeTemplatePayload>({
+            query: (body) => ({
+                url: '/badges/templates',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+        updateBadgeTemplate: builder.mutation<BadgeTemplate, { id: number; data: Partial<CreateBadgeTemplatePayload> }>({
+            query: ({ id, data }) => ({
+                url: `/badges/templates/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+        deleteBadgeTemplate: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/badges/templates/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+
+        // Dashboard Endpoints
+        getDashboardForms: builder.query<DashboardForm[], void>({
+            query: () => '/dashboard/forms',
+            transformResponse: (response: DashboardFormsResponse) => response.data,
+        }),
+        getDashboardData: builder.query<DashboardData, { formName?: string }>({
+            query: ({ formName }) => {
+                const params = new URLSearchParams();
+                if (formName && formName !== 'all') {
+                    params.append('formName', formName);
+                }
+                return `/dashboard/data?${params.toString()}`;
+            },
+            transformResponse: (response: DashboardDataResponse) => response.data,
+        }),
+        // Invitation Endpoints
+        getInvitationTemplates: builder.query<InvitationTemplate[], void>({
+            query: () => '/invitations/templates',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Invitation'],
+        }),
+        createInvitationTemplate: builder.mutation<InvitationTemplate, CreateInvitationTemplatePayload>({
+            query: (payload) => ({
+                url: '/invitations/templates',
+                method: 'POST',
+                body: payload,
+            }),
+            invalidatesTags: ['Invitation'],
+        }),
+        updateInvitationTemplate: builder.mutation<InvitationTemplate, { id: number; data: Partial<CreateInvitationTemplatePayload> }>({
+            query: ({ id, data }) => ({
+                url: `/invitations/templates/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Invitation'],
+        }),
+        deleteInvitationTemplate: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/invitations/templates/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Invitation'],
         }),
     }),
 });
@@ -702,6 +962,7 @@ export const {
     useDeleteCategoryMutation,
     useTogglePermissionMutation,
     useBulkUpdatePermissionsMutation,
+    useDeletePermissionMutation,
     useGetApplicationsQuery,
     useGetApplicationByIdQuery,
     useUpdateApplicationStatusMutation,
@@ -722,8 +983,26 @@ export const {
     useGetLandingPageSettingsQuery,
     useCreateLandingPageSettingsMutation,
     useDeleteLandingPageSettingsMutation,
-    useGetWorkflowConfigsQuery,
-    useCreateWorkflowConfigMutation,
-    useGetWorkflowConfigByStepQuery,
-    useBulkUpdateWorkflowConfigsMutation
+
+    // New Workflow hooks
+    useGetWorkflowStepsQuery,
+    useCreateWorkflowStepMutation,
+    useUpdateWorkflowStepMutation,
+    useDeleteWorkflowStepMutation,
+    useBulkUpdateWorkflowStepsMutation,
+    // Forms
+    useGetFormsQuery,
+    // Badge Templates
+    useGetBadgeTemplatesQuery,
+    useCreateBadgeTemplateMutation,
+    useUpdateBadgeTemplateMutation,
+    useDeleteBadgeTemplateMutation,
+    // Invitation Hooks
+    useGetInvitationTemplatesQuery,
+    useCreateInvitationTemplateMutation,
+    useUpdateInvitationTemplateMutation,
+    useDeleteInvitationTemplateMutation,
+    // Dashboard Hooks
+    useGetDashboardFormsQuery,
+    useGetDashboardDataQuery,
 } = api;
