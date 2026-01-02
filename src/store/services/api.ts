@@ -161,6 +161,7 @@ export interface EmailTemplate {
     emailContent: string;
     dynamicVariables: string[] | string; // API might return stringified JSON or array
     attachmentUrl: string | null;
+    isDefault: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -818,6 +819,13 @@ export const api = createApi({
             }),
             invalidatesTags: ['EmailTemplate'],
         }),
+        setDefaultEmailTemplate: builder.mutation<EmailTemplate, number>({
+            query: (id) => ({
+                url: `/email-templates/${id}/default`,
+                method: 'PATCH',
+            }),
+            invalidatesTags: ['EmailTemplate'],
+        }),
         deleteEmailTemplate: builder.mutation<void, number>({
             query: (id) => ({
                 url: `/email-templates/${id}`,
@@ -996,6 +1004,7 @@ export const {
     useCreateEmailTemplateMutation,
     useUpdateEmailTemplateMutation,
     useDeleteEmailTemplateMutation,
+    useSetDefaultEmailTemplateMutation,
     useGetLandingPageSettingsQuery,
     useCreateLandingPageSettingsMutation,
     useDeleteLandingPageSettingsMutation,

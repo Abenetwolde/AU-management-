@@ -25,6 +25,7 @@ import {
     useCreateEmailTemplateMutation,
     useUpdateEmailTemplateMutation,
     useDeleteEmailTemplateMutation,
+    useSetDefaultEmailTemplateMutation,
     EmailTemplate
 } from '@/store/services/api';
 
@@ -38,6 +39,7 @@ export function EmailTemplates() {
     const [createTemplate, { isLoading: isCreating }] = useCreateEmailTemplateMutation();
     const [updateTemplate, { isLoading: isUpdating }] = useUpdateEmailTemplateMutation();
     const [deleteTemplate, { isLoading: isDeleting }] = useDeleteEmailTemplateMutation();
+    const [setDefaultTemplate, { isLoading: isSettingDefault }] = useSetDefaultEmailTemplateMutation();
 
     // Local State
     const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -70,6 +72,15 @@ export function EmailTemplates() {
         setAttachmentFile(null); // Reset file input
         setIsEditorOpen(true);
         setIsPreviewMode(false);
+    };
+
+    const handleSetDefault = async (id: number) => {
+        try {
+            await setDefaultTemplate(id).unwrap();
+            toast.success('Template set as default successfully');
+        } catch (error) {
+            toast.error('Failed to set template as default');
+        }
     };
 
     const handleDelete = async (id: number) => {
@@ -169,8 +180,21 @@ export function EmailTemplates() {
                                     Last Updated: {new Date(template.updatedAt).toLocaleDateString()}
                                 </p>
                             </div>
-                            <div className="p-2.5 bg-blue-50 rounded-xl group-hover:bg-blue-600 transition-colors">
-                                <Mail className="h-5 w-5 text-blue-600 group-hover:text-white transition-colors" />
+                            <div className="flex flex-col items-end gap-2">
+                                <div className={cn(
+                                    "p-2.5 rounded-xl transition-colors",
+                                    template.isDefault ? "bg-green-100" : "bg-blue-50 group-hover:bg-blue-600"
+                                )}>
+                                    <Mail className={cn(
+                                        "h-5 w-5 transition-colors",
+                                        template.isDefault ? "text-green-600" : "text-blue-600 group-hover:text-white"
+                                    )} />
+                                </div>
+                                {template.isDefault && (
+                                    <span className="text-[10px] font-bold bg-green-500 text-white px-2 py-0.5 rounded-full shadow-sm">
+                                        ACTIVE
+                                    </span>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -213,9 +237,20 @@ export function EmailTemplates() {
                                         size="sm"
                                         onClick={() => handleDelete(template.id)}
                                         className="h-9 w-9 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                        disabled={isDeleting}
+                                        disabled={isDeleting || isSettingDefault}
                                     >
                                         <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                                {!isReadOnly && !template.isDefault && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSetDefault(template.id)}
+                                        className="text-[10px] font-bold h-9 px-3 border-gray-200 hover:border-green-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                                        disabled={isSettingDefault}
+                                    >
+                                        Set as Default
                                     </Button>
                                 )}
                             </div>
