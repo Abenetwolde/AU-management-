@@ -25,7 +25,8 @@ import {
     Smartphone,
     Tablet,
     X,
-    ArrowLeft
+    ArrowLeft,
+    GripVertical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -35,6 +36,52 @@ import {
     useUpdateFormMutation
 } from '@/store/services/api';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+interface SortableFieldProps {
+    id: string;
+    children: (props: { attributes: any; listeners: any; isDragging: boolean }) => React.ReactNode;
+}
+
+function SortableField({ id, children }: SortableFieldProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 'auto',
+        position: 'relative' as const,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style}>
+            {children({ attributes, listeners, isDragging })}
+        </div>
+    );
+}
 
 interface FormField {
     id: string;
@@ -208,6 +255,27 @@ export function FormEditor() {
         }));
     };
 
+    const selectedField = fields.find(f => f.id === selectedFieldId);
+
+    // Check for duplicates across the entire form
+    const hasDuplicates = fields.some((f, idx) =>
+        fields.some((other, otherIdx) =>
+            idx !== otherIdx && (
+                f.label.toLowerCase() === other.label.toLowerCase() ||
+                f.fieldName === other.fieldName
+            )
+        )
+    );
+
+    // Check specific duplicates for the selected field (for UI feedback)
+    const isLabelDuplicate = selectedField
+        ? fields.some(f => f.id !== selectedField.id && f.label.toLowerCase() === selectedField.label.toLowerCase())
+        : false;
+
+    const isKeyDuplicate = selectedField
+        ? fields.some(f => f.id !== selectedField.id && f.fieldName === selectedField.fieldName)
+        : false;
+
     const updateValidation = (id: string, key: keyof NonNullable<FormField['validation']>, value: any) => {
         setFields(fields.map(f => {
             if (f.id === id) {
@@ -220,7 +288,38 @@ export function FormEditor() {
         }));
     };
 
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            setFields((items) => {
+                const oldIndex = items.findIndex((i) => i.id === active.id);
+                const newIndex = items.findIndex((i) => i.id === over.id);
+
+                const newFields = arrayMove(items, oldIndex, newIndex);
+                // Update displayOrder
+                return newFields.map((f, idx) => ({ ...f, displayOrder: idx + 1 }));
+            });
+        }
+    };
+
     const handleSave = async () => {
+        if (hasDuplicates) {
+            toast.error("Form contains duplicate fields. Please fix errors before saving.");
+            return;
+        }
+
         // Construct Payload
         const payload = {
             name: formName,
@@ -260,8 +359,6 @@ export function FormEditor() {
     const FIELDS_PER_PAGE = 5;
     const totalPages = Math.ceil(fields.length / FIELDS_PER_PAGE);
     const currentPreviewFields = fields.slice((previewStep - 1) * FIELDS_PER_PAGE, previewStep * FIELDS_PER_PAGE);
-
-    const selectedField = fields.find(f => f.id === selectedFieldId);
 
     const isSaving = isCreating || isUpdating;
 
@@ -320,7 +417,7 @@ export function FormEditor() {
                             <Button variant="outline" size="sm" className="gap-2 flex-1 sm:flex-none" onClick={() => { setPreviewStep(1); setPreviewOpen(true); }}>
                                 <Eye className="h-4 w-4" /> Preview
                             </Button>
-                            <Button size="sm" className="bg-black hover:bg-gray-800 text-white gap-2 flex-1 sm:flex-none" onClick={handleSave} disabled={isSaving}>
+                            <Button size="sm" className="bg-black hover:bg-gray-800 text-white gap-2 flex-1 sm:flex-none" onClick={handleSave} disabled={isSaving || hasDuplicates}>
                                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                                 <Save className="h-4 w-4" /> {isEditMode ? "Update" : "Publish"} Form
                             </Button>
@@ -328,72 +425,84 @@ export function FormEditor() {
                     </CardHeader>
                     <CardContent className="p-0 flex-1 bg-gray-50/30 overflow-hidden">
                         <ScrollArea className="h-full p-4 lg:p-8">
-                            <div className="max-w-3xl mx-auto space-y-4 pb-20">
-                                {fields.map((field, index) => (
-                                    <div
-                                        key={field.id}
-                                        onClick={() => setSelectedFieldId(field.id)}
-                                        className={cn(
-                                            "group relative bg-white p-6 rounded-xl border transition-all cursor-pointer hover:shadow-md",
-                                            selectedFieldId === field.id
-                                                ? "border-blue-500 ring-2 ring-blue-50 shadow-md"
-                                                : "border-gray-200"
-                                        )}
-                                    >
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
-                                                    {index + 1}
-                                                </span>
-                                                <span className="text-sm font-bold text-gray-900">{field.label}</span>
-                                                {field.required && <span className="text-red-500 text-xs font-bold">*Required</span>}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {field.templateId && <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Fixed</span>}
-                                                <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                                                    {field.type}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="pointer-events-none opacity-60">
-                                            {/* Mock Inputs for Canvas */}
-                                            {['text', 'email', 'number', 'date', 'password'].includes(field.type) && (
-                                                <div className="h-10 w-full bg-gray-50 border rounded-md px-3 flex items-center text-sm text-gray-400">
-                                                    {field.placeholder || "Input"}
-                                                </div>
-                                            )}
-                                            {field.type === 'textarea' && (
-                                                <div className="h-24 w-full bg-gray-50 border rounded-md px-3 py-2 text-sm text-gray-400">
-                                                    {field.placeholder || "Enter long text..."}
-                                                </div>
-                                            )}
-                                            {field.type === 'file' && (
-                                                <div className="h-20 w-full bg-gray-50 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-gray-400">
-                                                    <Upload className="h-5 w-5 mb-1" />
-                                                    <span className="text-xs">File Upload Area</span>
-                                                </div>
-                                            )}
-                                            {(field.type === 'radio' || field.type === 'checkbox') && (
-                                                <div className="flex flex-wrap gap-4">
-                                                    {(field.options || ['Option 1', 'Option 2']).map((opt, i) => (
-                                                        <div key={i} className="flex items-center gap-2">
-                                                            <div className={`h-4 w-4 border ${field.type === 'radio' ? 'rounded-full' : 'rounded'}`} />
-                                                            <span className="text-sm">{opt}</span>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                                    <div className="max-w-3xl mx-auto space-y-4 pb-20">
+                                        {fields.map((field, index) => (
+                                            <SortableField key={field.id} id={field.id}>
+                                                {({ attributes, listeners, isDragging }) => (
+                                                    <div
+                                                        onClick={() => setSelectedFieldId(field.id)}
+                                                        className={cn(
+                                                            "group relative bg-white p-6 rounded-xl border transition-all cursor-pointer hover:shadow-md",
+                                                            selectedFieldId === field.id
+                                                                ? "border-blue-500 ring-2 ring-blue-50 shadow-md"
+                                                                : "border-gray-200",
+                                                            isDragging && "shadow-xl ring-2 ring-blue-400 opacity-80 z-50 transform scale-[1.02]",
+                                                            (field.label.toLowerCase() === selectedField?.label.toLowerCase() && field.id !== selectedField?.id && isLabelDuplicate) || (field.fieldName === selectedField?.fieldName && field.id !== selectedField?.id && isKeyDuplicate) ? "border-red-500 bg-red-50" : ""
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 p-1 -ml-2 rounded hover:bg-gray-100 transition-colors outline-none">
+                                                                    <GripVertical className="h-5 w-5" />
+                                                                </div>
+                                                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                                                                    {index + 1}
+                                                                </span>
+                                                                <span className="text-sm font-bold text-gray-900">{field.label}</span>
+                                                                {field.required && <span className="text-red-500 text-xs font-bold">*Required</span>}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {field.templateId && <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Fixed</span>}
+                                                                <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                                                                    {field.type}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {field.type === 'dropdown' && (
-                                                <div className="h-10 w-full bg-gray-50 border rounded-md px-3 flex items-center justify-between text-sm text-gray-400">
-                                                    <span>Select option</span>
-                                                    <ChevronDown className="h-4 w-4" />
-                                                </div>
-                                            )}
-                                        </div>
+
+                                                        <div className="pointer-events-none opacity-60">
+                                                            {/* Mock Inputs for Canvas */}
+                                                            {['text', 'email', 'number', 'date', 'password'].includes(field.type) && (
+                                                                <div className="h-10 w-full bg-gray-50 border rounded-md px-3 flex items-center text-sm text-gray-400">
+                                                                    {field.placeholder || "Input"}
+                                                                </div>
+                                                            )}
+                                                            {field.type === 'textarea' && (
+                                                                <div className="h-24 w-full bg-gray-50 border rounded-md px-3 py-2 text-sm text-gray-400">
+                                                                    {field.placeholder || "Enter long text..."}
+                                                                </div>
+                                                            )}
+                                                            {field.type === 'file' && (
+                                                                <div className="h-20 w-full bg-gray-50 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-gray-400">
+                                                                    <Upload className="h-5 w-5 mb-1" />
+                                                                    <span className="text-xs">File Upload Area</span>
+                                                                </div>
+                                                            )}
+                                                            {(field.type === 'radio' || field.type === 'checkbox') && (
+                                                                <div className="flex flex-wrap gap-4">
+                                                                    {(field.options || ['Option 1', 'Option 2']).map((opt, i) => (
+                                                                        <div key={i} className="flex items-center gap-2">
+                                                                            <div className={`h-4 w-4 border ${field.type === 'radio' ? 'rounded-full' : 'rounded'}`} />
+                                                                            <span className="text-sm">{opt}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            {field.type === 'dropdown' && (
+                                                                <div className="h-10 w-full bg-gray-50 border rounded-md px-3 flex items-center justify-between text-sm text-gray-400">
+                                                                    <span>Select option</span>
+                                                                    <ChevronDown className="h-4 w-4" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </SortableField>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                </SortableContext>
+                            </DndContext>
                         </ScrollArea>
                     </CardContent>
                 </Card>
@@ -416,15 +525,18 @@ export function FormEditor() {
                                         <Input
                                             value={selectedField.label}
                                             onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+                                            className={cn(isLabelDuplicate && "border-red-500 focus-visible:ring-red-500")}
                                         />
+                                        {isLabelDuplicate && <p className="text-xs text-red-500">Duplicate label</p>}
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-600 uppercase">Input ID / Key</label>
                                         <Input
                                             value={selectedField.fieldName || ''}
                                             onChange={(e) => updateField(selectedField.id, { fieldName: e.target.value })}
-                                            className="font-mono text-xs"
+                                            className={cn("font-mono text-xs", isKeyDuplicate && "border-red-500 focus-visible:ring-red-500")}
                                         />
+                                        {isKeyDuplicate && <p className="text-xs text-red-500">Duplicate field key</p>}
                                     </div>
                                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                                         <label className="text-sm font-bold text-gray-700">Required</label>
