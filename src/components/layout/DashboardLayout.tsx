@@ -116,7 +116,7 @@ export function DashboardLayout() {
                                 Accredited Journalists
                             </NavLink>
                         )}
-                                {/* Workflow Builder - 'workflow:config:view' */}
+                        {/* Workflow Builder - 'workflow:config:view' */}
                         {checkPermission('workflow:config:view') && (
                             <NavLink
                                 to={`${basePath}/workflow`}
@@ -133,7 +133,7 @@ export function DashboardLayout() {
                                 Workflow Builder
                             </NavLink>
                         )}
-     {/* Permissions - 'permission:matrix:view' */}
+                        {/* Permissions - 'permission:matrix:view' */}
                         {checkPermission('permission:matrix:view') && (
                             <NavLink
                                 to={`${basePath}/permissions`}
@@ -150,11 +150,11 @@ export function DashboardLayout() {
                                 Permissions
                             </NavLink>
                         )}
-                
-                  {/* Form Builder - 'form:view:all' */}
+
+                        {/* Form Builder - 'form:view:all' */}
                         {checkPermission('form:view:all') && (
                             <NavLink
-                                to={`${basePath}/form-builder`}
+                                to={`${basePath}/forms`}
                                 className={({ isActive }) =>
                                     cn(
                                         "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
@@ -188,7 +188,7 @@ export function DashboardLayout() {
                         )}
 
 
-      
+
                         {/* Organizations - 'organization:view:all' */}
                         {checkPermission('organization:view:all') && (
                             <NavLink
@@ -225,9 +225,9 @@ export function DashboardLayout() {
                             </NavLink>
                         )}
 
-                
 
-                   
+
+
 
                         {/* Email Templates */}
                         {(user?.role === UserRole.SUPER_ADMIN) && (
@@ -281,7 +281,7 @@ export function DashboardLayout() {
                                 Invitation Templates
                             </NavLink>
                         )}
-        {/* Invitation Letters */}
+                        {/* Invitation Letters */}
                         {checkPermission('application:view:approved') && (
                             <NavLink
                                 to={`${basePath}/invitations`}

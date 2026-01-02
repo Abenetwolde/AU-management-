@@ -505,7 +505,8 @@ export interface UsersResponse {
     };
 }
 
-export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
+export const FILE_BASE_URL = 'http://localhost:3000';
+// export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
 
 export const getFileUrl = (path?: string | null): string => {
     if (!path) {
@@ -770,6 +771,22 @@ export const api = createApi({
                 body,
             }),
         }),
+        getFormById: builder.query<any, string>({
+            query: (id) => `/forms/${id}`,
+        }),
+        updateForm: builder.mutation<any, { id: number; data: any }>({
+            query: ({ id, data }) => ({
+                url: `/forms/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+        }),
+        deleteForm: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/forms/${id}`,
+                method: 'DELETE',
+            }),
+        }),
         // Email Templates
         getEmailTemplates: builder.query<EmailTemplatesResponse['data'], { page?: number; limit?: number } | void>({
             query: (params) => {
@@ -974,7 +991,6 @@ export const {
     useCreateUserMutation,
     useUpdateUserMutation,
     useGetFormFieldTemplatesQuery,
-    useCreateFormMutation,
     useGetEmailTemplatesQuery,
     useGetEmailTemplateByIdQuery,
     useCreateEmailTemplateMutation,
@@ -992,6 +1008,10 @@ export const {
     useBulkUpdateWorkflowStepsMutation,
     // Forms
     useGetFormsQuery,
+    useGetFormByIdQuery,
+    useUpdateFormMutation,
+    useDeleteFormMutation,
+    useCreateFormMutation,
     // Badge Templates
     useGetBadgeTemplatesQuery,
     useCreateBadgeTemplateMutation,

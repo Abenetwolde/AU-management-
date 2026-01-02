@@ -13,7 +13,9 @@ import { BadgeManagement } from './pages/dashboard/BadgeManagement';
 import { BadgeSlipPreview } from './pages/dashboard/BadgeSlipPreview';
 import { UserManagement } from './pages/dashboard/UserManagement';
 import { EmailTemplates } from './pages/dashboard/EmailTemplates';
-import { RegistrationFormBuilder } from './pages/dashboard/RegistrationFormBuilder';
+// import { RegistrationFormBuilder } from './pages/dashboard/RegistrationFormBuilder'; // Removed
+import FormList from './pages/dashboard/FormList';
+import { FormEditor } from './pages/dashboard/FormEditor';
 import { BadgeTemplates } from './pages/dashboard/BadgeTemplates';
 import { SystemSettings } from './pages/dashboard/SystemSettings';
 import { OrganizationManagement } from './pages/dashboard/OrganizationManagement';
@@ -57,7 +59,12 @@ function App() {
                                     {/* Admin Features (Gated by permissions internally or sidebar) */}
                                     <Route path="users" element={<UserManagement />} />
                                     <Route path="email-templates" element={<EmailTemplates />} />
-                                    <Route path="form-builder" element={<RegistrationFormBuilder />} />
+
+                                    {/* Form Builder Routes */}
+                                    <Route path="forms" element={<FormList />} />
+                                    <Route path="forms/builder" element={<FormEditor />} />
+                                    <Route path="forms/builder/:id" element={<FormEditor />} />
+
                                     <Route path="badge-templates" element={<BadgeTemplates />} />
                                     <Route path="settings" element={<SystemSettings />} />
                                     <Route path="organizations" element={<OrganizationManagement />} />

@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
-    Plus,
-    GripVertical,
     Settings2,
     Trash2,
     Type,
@@ -18,7 +16,6 @@ import {
     Upload,
     Save,
     Eye,
-    MessageSquare,
     ChevronDown,
     AlignLeft,
     Loader2,
@@ -27,10 +24,17 @@ import {
     Monitor,
     Smartphone,
     Tablet,
-    X
+    X,
+    ArrowLeft
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useGetFormFieldTemplatesQuery, useCreateFormMutation } from '@/store/services/api';
+import {
+    useGetFormFieldTemplatesQuery,
+    useCreateFormMutation,
+    useGetFormByIdQuery,
+    useUpdateFormMutation
+} from '@/store/services/api';
+import { useParams, useNavigate } from 'react-router-dom';
 
 interface FormField {
     id: string;
@@ -41,7 +45,14 @@ interface FormField {
     helpText?: string;
     options?: string[];
     templateId?: number;
-    validation?: any;
+    validation?: {
+        minLength?: number;
+        maxLength?: number;
+        pattern?: string;
+        minValue?: number;
+        maxValue?: number;
+        errorMessage?: string;
+    };
     displayOrder?: number;
     fieldName?: string; // Original field name from API
 }
@@ -57,9 +68,16 @@ const FIELD_TYPES = [
     { type: 'file', label: 'File Upload', icon: Upload },
 ] as const;
 
-export function RegistrationFormBuilder() {
+export function FormEditor() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const isEditMode = !!id;
+
     const { data: templates, isLoading: isLoadingTemplates } = useGetFormFieldTemplatesQuery();
-    const [createForm, { isLoading: isSaving }] = useCreateFormMutation();
+    const { data: existingForm, isLoading: isLoadingForm } = useGetFormByIdQuery(id!, { skip: !isEditMode });
+
+    const [createForm, { isLoading: isCreating }] = useCreateFormMutation();
+    const [updateForm, { isLoading: isUpdating }] = useUpdateFormMutation();
 
     const [fields, setFields] = useState<FormField[]>([]);
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
@@ -67,9 +85,51 @@ export function RegistrationFormBuilder() {
     const [previewStep, setPreviewStep] = useState(1);
     const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
 
-    // Populate fields
+    const [formName, setFormName] = useState("Press Accreditation Application");
+    const [formDescription, setFormDescription] = useState("Standard application form for press accreditation.");
+    const [formType, setFormType] = useState("ACCREDITATION");
+
+    // Populate fields from templates (only for new forms initially, or if we want sidebar templates)
+    // Actually, distinct logic: 
+    // If Edit Mode: populate from existingForm
+    // If Create Mode: start empty or with default? The original utilized templates to pre-fill. 
+    // Let's keep template logic for "toolbox" but initial state depends on mode.
+
     useEffect(() => {
-        if (templates) {
+        if (isEditMode && existingForm) {
+            setFormName(existingForm.name);
+            setFormDescription(existingForm.description || "");
+            setFormType(existingForm.type);
+
+            if (existingForm.FormFields) {
+                const mapped: FormField[] = existingForm.FormFields.map((f: any) => {
+                    let options: string[] = [];
+                    if (f.field_options?.options) {
+                        options = f.field_options.options;
+                    }
+
+                    return {
+                        id: String(f.field_id || Math.random()), // Use API ID
+                        type: f.field_type === 'boolean' ? 'radio' : f.field_type, // map boolean back to radio/checkbox UI
+                        label: f.label,
+                        required: f.is_required,
+                        placeholder: `Enter ${f.label.toLowerCase()}`,
+                        options: options.length > 0 ? options : undefined,
+                        validation: f.validation_criteria || {},
+                        displayOrder: f.display_order,
+                        fieldName: f.field_name,
+                        templateId: undefined // Identifying it's an existing field
+                    };
+                });
+                setFields(mapped.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)));
+            }
+        } else if (!isEditMode && templates && fields.length === 0) {
+            // Optional: Pre-load from templates IF desired. Original code did:
+            // setFields(mappedFields);
+            // We can preserve that behavior for new forms if that's the "Default"
+            // But usually a "Builder" starts empty or with a specific template. 
+            // Let's assume the user wants the "Default" template loads if it's a new form.
+
             const mappedFields: FormField[] = templates.map(t => {
                 let type: FormField['type'] = 'text';
                 let options: string[] = [];
@@ -84,9 +144,7 @@ export function RegistrationFormBuilder() {
                     try {
                         const parsed = typeof t.field_options === 'string' ? JSON.parse(t.field_options || '{}') : t.field_options;
                         if (parsed.options) options = parsed.options;
-                    } catch (e) {
-                        // ignore
-                    }
+                    } catch (e) { }
                 }
                 if (t.field_type === 'boolean' && options.length === 0) {
                     options = ['True', 'False'];
@@ -100,7 +158,7 @@ export function RegistrationFormBuilder() {
                     required: t.is_required,
                     placeholder: `Enter ${t.label.toLowerCase()}`,
                     options: options.length > 0 ? options : undefined,
-                    validation: t.validation_criteria ? (typeof t.validation_criteria === 'string' ? JSON.parse(t.validation_criteria) : t.validation_criteria) : null,
+                    validation: t.validation_criteria ? (typeof t.validation_criteria === 'string' ? JSON.parse(t.validation_criteria) : t.validation_criteria) : {},
                     displayOrder: t.display_order,
                     fieldName: t.field_name
                 };
@@ -108,10 +166,9 @@ export function RegistrationFormBuilder() {
 
             setFields(mappedFields);
         }
-    }, [templates]);
+    }, [isEditMode, existingForm, templates]);
 
     const addField = (type: FormField['type']) => {
-        const timestamp = Date.now();
         const label = `New ${type} field`;
         const newField: FormField = {
             id: `new_${Math.random().toString(36).substr(2, 9)}`,
@@ -122,7 +179,8 @@ export function RegistrationFormBuilder() {
             fieldName: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
             displayOrder: fields.length + 1,
             // Add default options for choice components
-            options: ['checkbox', 'radio', 'dropdown'].includes(type) ? ['Option 1', 'Option 2', 'Option 3'] : undefined
+            options: ['checkbox', 'radio', 'dropdown'].includes(type) ? ['Option 1', 'Option 2', 'Option 3'] : undefined,
+            validation: {}
         };
         setFields([...fields, newField]);
         setSelectedFieldId(newField.id);
@@ -139,13 +197,9 @@ export function RegistrationFormBuilder() {
                 const updated = { ...f, ...updates };
                 // Keep fieldName in sync with label if it hasn't been manually edited (heuristic)
                 // or just enforce user to edit it manually if they want custom.
-                // Here we'll just update the fieldName if the label changes and the previous fieldName matched the previous label
-                // But simplified: Just let user edit manually for now, or auto-update only on creation logic. 
-                // The user asked "key same as label with underscore". 
-                // Let's force update the key if the label changes, unless that's annoying. 
-                // Better approach: When label changes, if the current fieldName looks like a snake_case version of the OLD label, update it.
-                // For simplicity/robustness based on request:
-                if (updates.label) {
+                if (updates.label && !f.fieldName?.startsWith('custom_')) {
+                    // Simple heuristic: always update key unless user specifically set a fixed one? 
+                    // For now, let's just enable manual edit and auto-update if it matches pattern
                     updated.fieldName = updates.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
                 }
                 return updated;
@@ -154,13 +208,25 @@ export function RegistrationFormBuilder() {
         }));
     };
 
+    const updateValidation = (id: string, key: keyof NonNullable<FormField['validation']>, value: any) => {
+        setFields(fields.map(f => {
+            if (f.id === id) {
+                const newValidation = { ...f.validation, [key]: value };
+                // Filter out empty/undefined
+                if (value === '' || value === undefined || value === null) delete newValidation[key];
+                return { ...f, validation: newValidation };
+            }
+            return f;
+        }));
+    };
+
     const handleSave = async () => {
         // Construct Payload
         const payload = {
-            name: "Press Accreditation Application",
-            description: "Standard application form for press accreditation including personal details, travel information, and equipment declarations.",
-            status: "PUBLISHED",
-            type: "ACCREDITATION",
+            name: formName,
+            description: formDescription,
+            status: "PUBLISHED", // Default to Published as requested
+            type: formType,
             icon: null,
             fields: fields.map((f, index) => ({
                 field_name: f.fieldName || f.label.toLowerCase().replace(/ /g, '_'),
@@ -173,14 +239,20 @@ export function RegistrationFormBuilder() {
             }))
         };
 
-        console.log("Creating Form Payload:", JSON.stringify(payload, null, 2));
+        console.log("Saving Form Payload:", JSON.stringify(payload, null, 2));
 
         try {
-            await createForm(payload).unwrap();
-            toast.success("Form published successfully!");
+            if (isEditMode) {
+                await updateForm({ id: parseInt(id!), data: payload }).unwrap();
+                toast.success("Form updated successfully!");
+            } else {
+                await createForm(payload).unwrap();
+                toast.success("Form published successfully!");
+            }
+            navigate('/dashboard/forms');
         } catch (error) {
             console.error(error);
-            toast.error("Failed to publish form");
+            toast.error(isEditMode ? "Failed to update form" : "Failed to publish form");
         }
     };
 
@@ -191,7 +263,9 @@ export function RegistrationFormBuilder() {
 
     const selectedField = fields.find(f => f.id === selectedFieldId);
 
-    if (isLoadingTemplates) {
+    const isSaving = isCreating || isUpdating;
+
+    if (isLoadingForm || isLoadingTemplates) {
         return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     }
 
@@ -199,6 +273,11 @@ export function RegistrationFormBuilder() {
         <div className="flex flex-col lg:flex-row min-h-[calc(100vh-140px)] gap-4 p-4 bg-gray-50/50">
             {/* Left Sidebar - Tools */}
             <div className="w-full lg:w-64 h-auto lg:h-full flex-shrink-0">
+                <div className="mb-4">
+                    <Button variant="ghost" className="pl-0 gap-2 text-gray-500 hover:text-gray-900" onClick={() => navigate('/dashboard/forms')}>
+                        <ArrowLeft className="h-4 w-4" /> Back to Forms
+                    </Button>
+                </div>
                 <Card className="border-none shadow-sm h-full flex flex-col">
                     <CardHeader className="py-4">
                         <CardTitle className="text-sm font-bold uppercase tracking-wider text-gray-500">Toolbox</CardTitle>
@@ -225,8 +304,16 @@ export function RegistrationFormBuilder() {
             <div className="flex-1 min-w-0">
                 <Card className="min-h-full border-none shadow-md overflow-hidden flex flex-col bg-white">
                     <CardHeader className="border-b bg-white z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 gap-4">
-                        <div>
-                            <CardTitle className="text-xl font-bold font-sans">Accreditation Form</CardTitle>
+                        <div className="space-y-1">
+                            {isEditMode ? (
+                                <Input
+                                    value={formName}
+                                    onChange={(e) => setFormName(e.target.value)}
+                                    className="text-xl font-bold font-sans border-none px-0 h-auto focus-visible:ring-0 shadow-none hover:bg-gray-50 rounded px-2 -ml-2 transition-colors"
+                                />
+                            ) : (
+                                <CardTitle className="text-xl font-bold font-sans">{formName}</CardTitle>
+                            )}
                             <CardDescription>{fields.length} fields configured</CardDescription>
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
@@ -235,7 +322,7 @@ export function RegistrationFormBuilder() {
                             </Button>
                             <Button size="sm" className="bg-black hover:bg-gray-800 text-white gap-2 flex-1 sm:flex-none" onClick={handleSave} disabled={isSaving}>
                                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                                <Save className="h-4 w-4" /> Publish Form
+                                <Save className="h-4 w-4" /> {isEditMode ? "Update" : "Publish"} Form
                             </Button>
                         </div>
                     </CardHeader>
@@ -323,30 +410,101 @@ export function RegistrationFormBuilder() {
                     {selectedField ? (
                         <ScrollArea className="flex-1">
                             <CardContent className="p-6 space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-600 uppercase">Label</label>
-                                    <Input
-                                        value={selectedField.label}
-                                        onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
-                                    />
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-600 uppercase">Label</label>
+                                        <Input
+                                            value={selectedField.label}
+                                            onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-600 uppercase">Input ID / Key</label>
+                                        <Input
+                                            value={selectedField.fieldName || ''}
+                                            onChange={(e) => updateField(selectedField.id, { fieldName: e.target.value })}
+                                            className="font-mono text-xs"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                        <label className="text-sm font-bold text-gray-700">Required</label>
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedField.required}
+                                            onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </div>
+
+                                    {/* Validation Section */}
+                                    <div className="pt-4 border-t space-y-4">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase">Validation Rules</h4>
+
+                                        {['text', 'textarea', 'email', 'password'].includes(selectedField.type) && (
+                                            <>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs text-gray-500">Min Length</label>
+                                                        <Input type="number"
+                                                            value={selectedField.validation?.minLength || ''}
+                                                            onChange={(e) => updateValidation(selectedField.id, 'minLength', e.target.value ? Number(e.target.value) : undefined)}
+                                                            className="h-8 text-xs"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs text-gray-500">Max Length</label>
+                                                        <Input type="number"
+                                                            value={selectedField.validation?.maxLength || ''}
+                                                            onChange={(e) => updateValidation(selectedField.id, 'maxLength', e.target.value ? Number(e.target.value) : undefined)}
+                                                            className="h-8 text-xs"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-gray-500">Regex Pattern</label>
+                                                    <Input
+                                                        value={selectedField.validation?.pattern || ''}
+                                                        onChange={(e) => updateValidation(selectedField.id, 'pattern', e.target.value)}
+                                                        className="h-8 font-mono text-xs"
+                                                        placeholder="e.g. ^[A-Z]+$"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {selectedField.type === 'number' && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-gray-500">Min Value</label>
+                                                    <Input type="number"
+                                                        value={selectedField.validation?.minValue || ''}
+                                                        onChange={(e) => updateValidation(selectedField.id, 'minValue', e.target.value ? Number(e.target.value) : undefined)}
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-gray-500">Max Value</label>
+                                                    <Input type="number"
+                                                        value={selectedField.validation?.maxValue || ''}
+                                                        onChange={(e) => updateValidation(selectedField.id, 'maxValue', e.target.value ? Number(e.target.value) : undefined)}
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-gray-500">Custom Error Message</label>
+                                            <Input
+                                                value={selectedField.validation?.errorMessage || ''}
+                                                onChange={(e) => updateValidation(selectedField.id, 'errorMessage', e.target.value)}
+                                                className="h-8 text-xs"
+                                                placeholder="e.g. Please enter a valid value"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-600 uppercase">Input ID / Key</label>
-                                    <Input
-                                        value={selectedField.fieldName || ''}
-                                        onChange={(e) => updateField(selectedField.id, { fieldName: e.target.value })}
-                                        className="font-mono text-xs"
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                                    <label className="text-sm font-bold text-gray-700">Required</label>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedField.required}
-                                        onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
-                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                </div>
+
                                 <div className="pt-6 border-t">
                                     <Button
                                         variant="ghost"
@@ -376,9 +534,9 @@ export function RegistrationFormBuilder() {
                                 <DialogDescription>Registration Form - Step {previewStep} of {totalPages}</DialogDescription>
                             </div>
                             <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
-                                <Button size="icon" variant={previewDevice === 'desktop' ? 'white' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('desktop')}><Monitor className="h-4 w-4" /></Button>
-                                <Button size="icon" variant={previewDevice === 'tablet' ? 'white' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('tablet')}><Tablet className="h-4 w-4" /></Button>
-                                <Button size="icon" variant={previewDevice === 'mobile' ? 'white' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('mobile')}><Smartphone className="h-4 w-4" /></Button>
+                                <Button size="icon" variant={previewDevice === 'desktop' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('desktop')}><Monitor className="h-4 w-4" /></Button>
+                                <Button size="icon" variant={previewDevice === 'tablet' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('tablet')}><Tablet className="h-4 w-4" /></Button>
+                                <Button size="icon" variant={previewDevice === 'mobile' ? 'secondary' : 'ghost'} className="h-8 w-8" onClick={() => setPreviewDevice('mobile')}><Smartphone className="h-4 w-4" /></Button>
                                 <div className="w-px h-4 bg-gray-300 mx-1" />
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setPreviewOpen(false)}><X className="h-4 w-4" /></Button>
                             </div>
@@ -395,8 +553,8 @@ export function RegistrationFormBuilder() {
                         )}>
                             {/* Form Header in Preview */}
                             <div className="p-8 border-b bg-blue-600 text-white rounded-t-inherit">
-                                <h1 className="text-2xl font-bold">Press Accreditation</h1>
-                                <p className="opacity-90 mt-1">Please fill in your details below.</p>
+                                <h1 className="text-2xl font-bold">{formName}</h1>
+                                <p className="opacity-90 mt-1">{formDescription}</p>
                             </div>
 
                             {/* Progress Bar */}
