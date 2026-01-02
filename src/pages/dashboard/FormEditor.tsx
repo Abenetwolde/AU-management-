@@ -30,6 +30,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
     useGetFormFieldTemplatesQuery,
     useCreateFormMutation,
     useGetFormByIdQuery,
@@ -135,6 +142,7 @@ export function FormEditor() {
     const [formName, setFormName] = useState("Press Accreditation Application");
     const [formDescription, setFormDescription] = useState("Standard application form for press accreditation.");
     const [formType, setFormType] = useState("ACCREDITATION");
+    const [formStatus, setFormStatus] = useState<"DRAFT" | "PUBLISHED" | "ARCHIVED">("PUBLISHED");
 
     // Populate fields from templates (only for new forms initially, or if we want sidebar templates)
     // Actually, distinct logic: 
@@ -147,6 +155,7 @@ export function FormEditor() {
             setFormName(existingForm.name);
             setFormDescription(existingForm.description || "");
             setFormType(existingForm.type);
+            setFormStatus(existingForm.status as any); // Cast for safety if enum varies
 
             if (existingForm.FormFields) {
                 const mapped: FormField[] = existingForm.FormFields.map((f: any) => {
@@ -324,7 +333,7 @@ export function FormEditor() {
         const payload = {
             name: formName,
             description: formDescription,
-            status: "PUBLISHED", // Default to Published as requested
+            status: formStatus,
             type: formType,
             icon: null,
             fields: fields.map((f, index) => ({
@@ -414,6 +423,18 @@ export function FormEditor() {
                             <CardDescription>{fields.length} fields configured</CardDescription>
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
+                            <div className="w-32">
+                                <Select value={formStatus} onValueChange={(val: any) => setFormStatus(val)}>
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="DRAFT">Draft</SelectItem>
+                                        <SelectItem value="PUBLISHED">Published</SelectItem>
+                                        <SelectItem value="ARCHIVED">Archived</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <Button variant="outline" size="sm" className="gap-2 flex-1 sm:flex-none" onClick={() => { setPreviewStep(1); setPreviewOpen(true); }}>
                                 <Eye className="h-4 w-4" /> Preview
                             </Button>
