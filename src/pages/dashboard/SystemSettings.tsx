@@ -32,10 +32,7 @@ interface SystemSettingsForm {
     contactEmail: string;
     contactLink: string;
     languages: Language[];
-    heroSectionConfig: string;
-    processTrackerConfig: string;
-    infoSectionConfig: string;
-    footerConfig: string;
+
 }
 
 const DEFAULT_SETTINGS: SystemSettingsForm = {
@@ -50,10 +47,6 @@ const DEFAULT_SETTINGS: SystemSettingsForm = {
         { code: 'en', name: 'English', flagEmoji: '🇺🇸', enabled: true },
         { code: 'fr', name: 'Français', flagEmoji: '🇫🇷', enabled: true },
     ],
-    heroSectionConfig: "{}",
-    processTrackerConfig: "{}",
-    infoSectionConfig: "{}",
-    footerConfig: "{}"
 };
 
 export function SystemSettings() {
@@ -69,10 +62,6 @@ export function SystemSettings() {
     const [mainLogo, setMainLogo] = useState<File | null>(null);
     const [footerLogo, setFooterLogo] = useState<File | null>(null);
     const [heroBackground, setHeroBackground] = useState<File | null>(null);
-    const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
-
-    // Preview URLs for new uploads
-    const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
     // Sync API data to local state
     useEffect(() => {
@@ -88,33 +77,14 @@ export function SystemSettings() {
                 languages: apiSettings.languages && apiSettings.languages.length > 0
                     ? apiSettings.languages.map(l => ({ ...l, enabled: true }))
                     : DEFAULT_SETTINGS.languages,
-                heroSectionConfig: JSON.stringify(apiSettings.heroSectionConfig || {}, null, 2),
-                processTrackerConfig: JSON.stringify(apiSettings.processTrackerConfig || {}, null, 2),
-                infoSectionConfig: JSON.stringify(apiSettings.infoSectionConfig || {}, null, 2),
-                footerConfig: JSON.stringify(apiSettings.footerConfig || {}, null, 2),
+                languages: apiSettings.languages && apiSettings.languages.length > 0
+                    ? apiSettings.languages.map(l => ({ ...l, enabled: true }))
+                    : DEFAULT_SETTINGS.languages,
             });
         }
     }, [apiSettings]);
 
-    const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const newFiles = Array.from(e.target.files);
-            setGalleryFiles(prev => [...prev, ...newFiles]);
 
-            // Create previews
-            const newPreviews = newFiles.map(file => URL.createObjectURL(file));
-            setGalleryPreviews(prev => [...prev, ...newPreviews]);
-        }
-    };
-
-    const removeGalleryFile = (index: number) => {
-        setGalleryFiles(prev => prev.filter((_, i) => i !== index));
-        setGalleryPreviews(prev => {
-            // Revoke URL to avoid memory leak
-            URL.revokeObjectURL(prev[index]);
-            return prev.filter((_, i) => i !== index);
-        });
-    };
 
     const handleSave = async () => {
         const formData = new FormData();
@@ -134,25 +104,7 @@ export function SystemSettings() {
             .map(({ enabled, ...rest }) => rest);
         // formData.append('languages', JSON.stringify(enabledLangs));
 
-        // Append configs (parsing to ensure validity or sending as JSON string if API expects string)
-        // Adjusting based on requirement "JSON objects" likely means parsing string back to obj before sending, 
-        // OR the API handles stringified JSON. The type in API I set to 'any', but multipart/form-data sends strings.
-        // I will send valid JSON strings.
-        try {
-            JSON.parse(settings.heroSectionConfig);
-            formData.append('heroSectionConfig', settings.heroSectionConfig);
 
-            JSON.parse(settings.processTrackerConfig);
-            formData.append('processTrackerConfig', settings.processTrackerConfig);
-
-            JSON.parse(settings.infoSectionConfig);
-            formData.append('infoSectionConfig', settings.infoSectionConfig);
-
-            JSON.parse(settings.footerConfig);
-        } catch (e) {
-            toast.error("Invalid JSON in Advanced Configuration tabs");
-            return;
-        }
 
         if (mainLogo) formData.append('mainLogo', mainLogo);
         if (footerLogo) formData.append('footerLogo', footerLogo);
@@ -161,20 +113,6 @@ export function SystemSettings() {
         // Append Languages as JSON string
         formData.append('languages', JSON.stringify(settings.languages));
 
-        // Append Gallery:
-        // 1. Existing URLs as JSON string (backend likely parses this to keep/reorder)
-        formData.append('gallery', JSON.stringify(settings.gallery || []));
-
-        // 2. New Files (backend adds these)
-        galleryFiles.forEach(file => {
-            formData.append('gallery', file);
-        });
-
-        // Configs -> ensure they are strings
-        formData.append('heroSectionConfig', typeof settings.heroSectionConfig === 'string' ? settings.heroSectionConfig : JSON.stringify(settings.heroSectionConfig));
-        formData.append('processTrackerConfig', typeof settings.processTrackerConfig === 'string' ? settings.processTrackerConfig : JSON.stringify(settings.processTrackerConfig));
-        formData.append('infoSectionConfig', typeof settings.infoSectionConfig === 'string' ? settings.infoSectionConfig : JSON.stringify(settings.infoSectionConfig));
-        formData.append('footerConfig', typeof settings.footerConfig === 'string' ? settings.footerConfig : JSON.stringify(settings.footerConfig));
         formData.append('privacyPolicyContent', settings.privacyPolicyContent);
         try {
             await createSettings(formData).unwrap();
@@ -182,8 +120,6 @@ export function SystemSettings() {
             setMainLogo(null);
             setFooterLogo(null);
             setHeroBackground(null);
-            setGalleryFiles([]);
-            setGalleryPreviews([]);
         } catch (error: any) {
             console.error(error);
             toast.error("Failed to save settings: " + (error?.data?.message || error.message));
@@ -241,8 +177,6 @@ export function SystemSettings() {
                     <TabsTrigger value="languages">Languages</TabsTrigger>
                     <TabsTrigger value="compliance">Compliance</TabsTrigger>
                     <TabsTrigger value="contact">Contact</TabsTrigger>
-                    <TabsTrigger value="gallery">Gallery</TabsTrigger>
-                    <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 </TabsList>
 
                 {/* General Settings */}
@@ -504,116 +438,7 @@ export function SystemSettings() {
                     </Card>
                 </TabsContent>
 
-                {/* Gallery */}
-                <TabsContent value="gallery" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Media Gallery</CardTitle>
-                            <CardDescription>Images and videos displayed in the landing page gallery section.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Existing Gallery (Mocked for now as API response structure for existing gallery is array of strings, need to render them) */}
-                            {apiSettings?.gallery && apiSettings.gallery.length > 0 && (
-                                <div className="space-y-2">
-                                    <Label>Current Gallery</Label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        {apiSettings.gallery.map((url, i) => (
-                                            <div key={i} className="relative aspect-video rounded-lg overflow-hidden border bg-gray-100 group">
-                                                <img src={getFileUrl(url)} alt={`Gallery ${i}`} className="w-full h-full object-cover" />
-                                                {/* Delete functionality for existing would require separate endpoint or logic, skipping for now */}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
-                            <div className="space-y-2">
-                                <Label>Upload New Media</Label>
-                                <div
-                                    className="border-2 border-dashed border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition-colors cursor-pointer"
-                                    onClick={() => document.getElementById('galleryInput')?.click()}
-                                >
-                                    <ImageIcon className="h-10 w-10 text-gray-300" />
-                                    <span className="text-sm text-gray-500 font-medium">Click to upload multiple images/videos</span>
-                                    <Input id="galleryInput" type="file" multiple className="hidden" accept="image/*,video/*" onChange={handleGallerySelect} />
-                                </div>
-                            </div>
-
-                            {/* Previews of new files */}
-                            {galleryPreviews.length > 0 && (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in">
-                                    {galleryPreviews.map((url, i) => (
-                                        <div key={i} className="relative aspect-video rounded-lg overflow-hidden border bg-gray-100 group">
-                                            <img src={url} alt="Preview" className="w-full h-full object-cover" />
-                                            <button
-                                                onClick={() => removeGalleryFile(i)}
-                                                className="absolute top-2 right-2 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Advanced */}
-                <TabsContent value="advanced" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Advanced Configuration</CardTitle>
-                            <CardDescription>Raw JSON configurations for dynamic sections.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <FileJson className="w-4 h-4 text-blue-500" />
-                                    <Label>Hero Section Config</Label>
-                                </div>
-                                <Textarea
-                                    value={settings.heroSectionConfig}
-                                    onChange={(e) => setSettings({ ...settings, heroSectionConfig: e.target.value })}
-                                    className="font-mono text-xs h-40"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <FileJson className="w-4 h-4 text-blue-500" />
-                                    <Label>Process Tracker Config</Label>
-                                </div>
-                                <Textarea
-                                    value={settings.processTrackerConfig}
-                                    onChange={(e) => setSettings({ ...settings, processTrackerConfig: e.target.value })}
-                                    className="font-mono text-xs h-40"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <FileJson className="w-4 h-4 text-blue-500" />
-                                    <Label>Info Section Config</Label>
-                                </div>
-                                <Textarea
-                                    value={settings.infoSectionConfig}
-                                    onChange={(e) => setSettings({ ...settings, infoSectionConfig: e.target.value })}
-                                    className="font-mono text-xs h-40"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <FileJson className="w-4 h-4 text-blue-500" />
-                                    <Label>Footer Config</Label>
-                                </div>
-                                <Textarea
-                                    value={settings.footerConfig}
-                                    onChange={(e) => setSettings({ ...settings, footerConfig: e.target.value })}
-                                    className="font-mono text-xs h-40"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
 
             </Tabs>
         </div>
