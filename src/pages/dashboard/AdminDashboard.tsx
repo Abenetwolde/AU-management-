@@ -1,0 +1,372 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import {
+    CheckCircle, Clock, XCircle, TrendingUp,
+    Eye, Activity, Calendar
+} from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend } from 'recharts';
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { useGetAdminAnalyticsQuery } from '@/store/services/api';
+import { exportDashboardAnalyticsToCSV, exportDashboardAnalyticsToPDF } from '@/lib/export-utils';
+import { Download, FileText } from 'lucide-react';
+
+// --- UTILITY ---
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}
+
+// --- UI COMPONENTS ---
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("rounded-2xl border border-slate-100 bg-white text-slate-900 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1", className)} {...props} />
+));
+Card.displayName = "Card";
+
+const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("flex flex-col space-y-1.5 p-6", className)} {...props} />
+));
+CardHeader.displayName = "CardHeader";
+
+const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(({ className, ...props }, ref) => (
+    <h3 ref={ref} className={cn("text-lg font-bold leading-none tracking-tight text-slate-800", className)} {...props} />
+));
+CardTitle.displayName = "CardTitle";
+
+const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+));
+CardContent.displayName = "CardContent";
+
+const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }>(({ className, variant = "default", size = "default", ...props }, ref) => {
+    return (
+        <button
+            className={cn(
+                "inline-flex items-center justify-center rounded-xl text-sm font-semibold ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-95",
+                {
+                    "bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-900/20": variant === "default",
+                    "border border-slate-200 bg-white hover:bg-slate-50 hover:text-slate-900": variant === "outline",
+                    "h-10 px-4 py-2": size === "default",
+                    "h-9 rounded-lg px-3": size === "sm",
+                },
+                className
+            )}
+            ref={ref}
+            {...props}
+        />
+    );
+});
+Button.displayName = "Button";
+
+const Badge = ({ children, className, variant = "neutral" }: { children: React.ReactNode, className?: string, variant?: string }) => {
+    const variants: Record<string, string> = {
+        APPROVED: "bg-emerald-100 text-emerald-700",
+        PENDING: "bg-amber-100 text-amber-700",
+        REJECTED: "bg-red-100 text-red-700",
+        neutral: "bg-slate-100 text-slate-700",
+    };
+    return (
+        <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider", variants[variant] || variants.neutral, className)}>
+            {children}
+        </span>
+    );
+};
+
+export default function AdminDashboard() {
+    const { data: analytics, isLoading, isError } = useGetAdminAnalyticsQuery();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) return null;
+
+    if (isLoading) return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
+            <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-600 font-medium">Loading your dashboard...</p>
+        </div>
+    );
+
+    if (isError || !analytics) return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
+            <div className="p-4 bg-red-100 text-red-600 rounded-full">
+                <XCircle className="h-12 w-12" />
+            </div>
+            <p className="text-slate-600 font-medium">Error loading dashboard data.</p>
+            <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
+        </div>
+    );
+
+    const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'];
+
+    return (
+        <div className="p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+            <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+      `}</style>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Executive Overview</h1>
+                    <p className="text-slate-500 font-medium mt-1">Review your assignment status and performance metrics.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => exportDashboardAnalyticsToCSV('Admin Dashboard', analytics.kpis, analytics.chartData)}>
+                            <Download className="h-4 w-4" />
+                            CSV
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-2 border-primary text-primary hover:bg-primary/5" onClick={() => exportDashboardAnalyticsToPDF('Admin Dashboard', analytics.kpis, analytics.chartData)}>
+                            <FileText className="h-4 w-4" />
+                            PDF
+                        </Button>
+                    </div>
+                    <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+                        <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                            <Calendar className="h-5 w-5" />
+                        </div>
+                        <div className="pr-4">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Current Date</p>
+                            <p className="text-sm font-bold text-slate-700 leading-none">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Total Assigned */}
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-500 to-blue-600 text-white overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform">
+                        <Activity className="h-24 w-24" />
+                    </div>
+                    <CardContent className="p-6 relative">
+                        <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">{analytics.kpis.totalApplicationsReceived.label}</p>
+                        <div className="flex items-end gap-3">
+                            <h3 className="text-4xl font-bold">{analytics.kpis.totalApplicationsReceived.value}</h3>
+                            <div className="flex items-center gap-1 text-white/90 text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full mb-1">
+                                <TrendingUp className="h-3 w-3" />
+                                <span>{analytics.kpis.totalApplicationsReceived.percentage}%</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Approved by You */}
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-teal-600 text-white overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform">
+                        <CheckCircle className="h-24 w-24" />
+                    </div>
+                    <CardContent className="p-6 relative">
+                        <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">{analytics.kpis.approvedByYou.label}</p>
+                        <div className="flex items-end gap-3">
+                            <h3 className="text-4xl font-bold">{analytics.kpis.approvedByYou.value}</h3>
+                            <div className="flex items-center gap-1 text-white/90 text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full mb-1">
+                                <TrendingUp className="h-3 w-3" />
+                                <span>{analytics.kpis.approvedByYou.percentage}%</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Pending Your Review */}
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 text-white overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 -p-4 opacity-10 group-hover:scale-110 transition-transform text-white">
+                        <Clock className="h-24 w-24" />
+                    </div>
+                    <CardContent className="p-6 relative">
+                        <p className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">{analytics.kpis.pendingDecision.label}</p>
+                        <div className="flex items-end gap-3">
+                            <h3 className="text-4xl font-bold">{analytics.kpis.pendingDecision.value}</h3>
+                            <div className="flex items-center gap-1 text-white/90 text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full mb-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Urgent</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Main Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Application Trends */}
+                <Card className="lg:col-span-2 shadow-sm border-slate-100">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>Application Processing Trends</CardTitle>
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                <Activity className="h-4 w-4" />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={analytics.chartData.timeSeries}>
+                                    <defs>
+                                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis
+                                        dataKey="date"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        dy={10}
+                                        tickFormatter={(str) => {
+                                            const date = new Date(str);
+                                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                        }}
+                                    />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Status Distribution */}
+                <Card className="shadow-sm border-slate-100">
+                    <CardHeader>
+                        <CardTitle>Status Breakdown</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={analytics.chartData.statusDistribution}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="count"
+                                        nameKey="status"
+                                    >
+                                        {analytics.chartData.statusDistribution.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend verticalAlign="bottom" height={36} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            {analytics.chartData.statusDistribution.map((item, i) => (
+                                <div key={item.status} className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                        <span className="text-slate-600 font-medium">{item.status}</span>
+                                    </div>
+                                    <span className="font-bold text-slate-900">{item.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Second Row: Org Distribution & Performance */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Performance Metric */}
+                <Card className="shadow-sm border-slate-100 flex flex-col justify-center items-center p-8 bg-slate-900 text-white overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+                    <div className="p-4 bg-white/10 rounded-2xl mb-4">
+                        <Clock className="h-8 w-8 text-blue-400" />
+                    </div>
+                    <p className="text-blue-200 text-sm font-bold uppercase tracking-widest mb-1">{analytics.performance.label}</p>
+                    <h3 className="text-5xl font-bold mb-2">
+                        {Math.floor(analytics.performance.averageProcessingTimeMinutes / 60)}h {analytics.performance.averageProcessingTimeMinutes % 60}m
+                    </h3>
+                    <p className="text-white/40 text-xs font-medium">Average across all your processed applications</p>
+                </Card>
+
+                {/* Organization Distribution */}
+                <Card className="lg:col-span-2 shadow-sm border-slate-100">
+                    <CardHeader>
+                        <CardTitle>Media Categories</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={analytics.chartData.orgDistribution} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                    <XAxis type="number" axisLine={false} tickLine={false} hide />
+                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} width={150} />
+                                    <Tooltip
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Recent Activity Table */}
+            <Card className="shadow-sm border-slate-100">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Recent Activity</CardTitle>
+                    <Button variant="outline" size="sm">View All</Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50 border-y border-slate-100">
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Applicant</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">App ID</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Action Date</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {analytics.recentActivity.map((activity) => (
+                                    <tr key={activity.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold text-xs">
+                                                    {activity.applicant.charAt(0)}
+                                                </div>
+                                                <span className="font-bold text-slate-900 text-sm">{activity.applicant}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-medium text-slate-600">#{activity.applicationId}</td>
+                                        <td className="px-6 py-4">
+                                            <Badge variant={activity.status}>{activity.status}</Badge>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-slate-500">
+                                            {new Date(activity.actionAt).toLocaleDateString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary transition-colors">
+                                                <Eye className="h-4 w-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}

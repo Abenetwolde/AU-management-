@@ -505,8 +505,116 @@ export interface UsersResponse {
     };
 }
 
-export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
+// Super Admin Dashboard Types
+export interface SuperAdminMetric {
+    value: number;
+    percentage: number;
+    trend: 'up' | 'down';
+    label: string;
+}
 
+export interface SuperAdminOverview {
+    totalApplications: SuperAdminMetric;
+    approvedApplications: SuperAdminMetric;
+    pendingApplications: SuperAdminMetric;
+}
+
+export interface SuperAdminCharts {
+    timeSeries: { date: string; count: number }[];
+    statusDistribution: { status: string; count: number }[];
+    roleDistribution: { roleName: string; count: number }[];
+}
+
+export interface SuperAdminStakeholder {
+    name: string;
+    value: number;
+}
+
+export interface SuperAdminStakeholderStatus {
+    [stakeholderName: string]: {
+        APPROVED: number;
+        REJECTED: number;
+        PENDING: number;
+    };
+}
+
+export interface SuperAdminPerformance {
+    stakeholder: string;
+    averageProcessingTimeMinutes: number;
+    trend: { date: string; value: number }[];
+}
+
+export interface SuperAdminOverviewResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminOverview;
+}
+
+export interface SuperAdminChartsResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminCharts;
+}
+
+export interface SuperAdminStakeholdersResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminStakeholder[];
+}
+
+export interface SuperAdminStakeholderStatusResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminStakeholderStatus;
+}
+
+export interface SuperAdminPerformanceResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminPerformance[];
+}
+
+// Admin Dashboard Types (Limited Admin)
+export interface AdminKPI {
+    value: number;
+    percentage: number;
+    trend: 'up' | 'down' | 'neutral';
+    label: string;
+}
+
+export interface AdminAnalyticsData {
+    kpis: {
+        totalApplicationsReceived: AdminKPI;
+        approvedByYou: AdminKPI;
+        pendingDecision: AdminKPI;
+    };
+    chartData: {
+        timeSeries: { date: string; count: number }[];
+        statusDistribution: { status: string; count: number }[];
+        orgDistribution: { name: string; value: number }[];
+    };
+    performance: {
+        averageProcessingTimeMinutes: number;
+        label: string;
+    };
+    recentActivity: {
+        id: number;
+        applicationId: number;
+        applicant: string;
+        status: string;
+        actionAt: string;
+        notes: string | null;
+    }[];
+}
+
+export interface AdminAnalyticsResponse {
+    success: boolean;
+    message: string;
+    data: AdminAnalyticsData;
+}
+
+// export const FILE_BASE_URL = 'http://localhost:5000';
+export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
 export const getFileUrl = (path?: string | null): string => {
     if (!path) {
         console.log('[getFileUrl] empty path:', path);
@@ -705,11 +813,29 @@ export const api = createApi({
             }),
             invalidatesTags: ['Application'],
         }),
+        approveWorkflowStep: builder.mutation<void, { applicationId: number, stepKey: string, status: 'APPROVED' | 'REJECTED', notes?: string }>({
+            query: ({ applicationId, stepKey, ...body }) => ({
+                url: `/applications/${applicationId}/approve/${stepKey}`,
+                method: 'PUT',
+                body,
+            }),
+            invalidatesTags: ['Application'],
+        }),
         getApprovedApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number } | void>({
             query: (params) => {
                 const page = params && 'page' in params ? params.page : 1;
                 const limit = params && 'limit' in params ? params.limit : 10;
                 return `/applications/approved?page=${page}&limit=${limit}`;
+            },
+            transformResponse: (response: ApplicationsResponse) => response.data,
+            providesTags: ['Application'],
+        }),
+        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string } | void>({
+            query: (params) => {
+                const page = params && 'page' in params ? params.page : 1;
+                const limit = params && 'limit' in params ? params.limit : 10;
+                const search = params && 'search' in params ? params.search : '';
+                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}`;
             },
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
@@ -946,6 +1072,31 @@ export const api = createApi({
             }),
             invalidatesTags: ['Invitation'],
         }),
+        // Super Admin Dashboard Endpoints
+        getSuperAdminOverview: builder.query<SuperAdminOverview, void>({
+            query: () => '/super-admin/overview',
+            transformResponse: (response: SuperAdminOverviewResponse) => response.data,
+        }),
+        getSuperAdminCharts: builder.query<SuperAdminCharts, void>({
+            query: () => '/super-admin/charts',
+            transformResponse: (response: SuperAdminChartsResponse) => response.data,
+        }),
+        getSuperAdminStakeholders: builder.query<SuperAdminStakeholder[], void>({
+            query: () => '/super-admin/stakeholders',
+            transformResponse: (response: SuperAdminStakeholdersResponse) => response.data,
+        }),
+        getSuperAdminStakeholderStatus: builder.query<SuperAdminStakeholderStatus, void>({
+            query: () => '/super-admin/stakeholder-status',
+            transformResponse: (response: SuperAdminStakeholderStatusResponse) => response.data,
+        }),
+        getSuperAdminPerformance: builder.query<SuperAdminPerformance[], void>({
+            query: () => '/super-admin/performance',
+            transformResponse: (response: SuperAdminPerformanceResponse) => response.data,
+        }),
+        getAdminAnalytics: builder.query<AdminAnalyticsData, void>({
+            query: () => '/admins/analytics',
+            transformResponse: (response: AdminAnalyticsResponse) => response.data,
+        }),
     }),
 });
 
@@ -966,7 +1117,9 @@ export const {
     useGetApplicationsQuery,
     useGetApplicationByIdQuery,
     useUpdateApplicationStatusMutation,
+    useApproveWorkflowStepMutation,
     useGetApprovedApplicationsQuery,
+    useGetWorkflowApplicationsQuery,
     useGetOrganizationsQuery,
     useCreateOrganizationMutation,
     useUpdateOrganizationMutation,
@@ -1005,4 +1158,12 @@ export const {
     // Dashboard Hooks
     useGetDashboardFormsQuery,
     useGetDashboardDataQuery,
+
+    // Super Admin Dashboard Hooks
+    useGetSuperAdminOverviewQuery,
+    useGetSuperAdminChartsQuery,
+    useGetSuperAdminStakeholdersQuery,
+    useGetSuperAdminStakeholderStatusQuery,
+    useGetSuperAdminPerformanceQuery,
+    useGetAdminAnalyticsQuery,
 } = api;

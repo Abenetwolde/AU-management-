@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/auth/context';
 import { cn } from '@/lib/utils';
-import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, MailOpen, FileText, Settings, Building2, GitMerge, ShieldAlert, Shield } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, MailOpen, FileText, Settings, Building2, GitMerge, ShieldAlert, Shield, Menu, X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import emmpaLogo from '@/assests/emmpa.png';
@@ -14,6 +15,7 @@ import auLogo from '@/assests/au.png';
 export function DashboardLayout() {
     const { user, logout, checkPermission } = useAuth();
     const navigate = useNavigate();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -49,15 +51,52 @@ export function DashboardLayout() {
 
     return (
         <div className="flex min-h-screen bg-gray-50/50">
+            {/* Mobile Header */}
+            <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                    <img src={getLogo()} alt="Logo" className="h-8 w-auto object-contain" />
+                    <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
+                        {getTitle()}
+                    </h1>
+                </div>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="hover:bg-gray-100 rounded-xl"
+                >
+                    <Menu className="h-6 w-6 text-gray-600" />
+                </Button>
+            </header>
+
+            {/* Sidebar Overlay */}
+            {isMobileMenuOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-[60] md:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-64 bg-gray-100/50 border-r border-gray-200 hidden md:flex flex-col fixed inset-y-0 text-gray-900">
-                <div className="p-6">
-                    <div className="flex items-center gap-2 text-primary">
-                        {/* <img src={getLogo()} alt="Logo" className="h-10 w-auto object-contain" /> */}
-                        <h1 className="text-xl font-bold font-sans leading-tight">
+            <aside className={cn(
+                "fixed inset-y-0 left-0 z-[70] w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 shadow-2xl md:shadow-none",
+                isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+            )}>
+                <div className="p-6 flex items-center justify-between border-b border-gray-50 mb-4">
+                    <div className="flex items-center gap-3 text-primary">
+                        <img src={getLogo()} alt="Logo" className="h-10 w-auto" />
+                        <h1 className="text-lg font-bold font-sans leading-tight">
                             {getTitle()}
                         </h1>
                     </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="md:hidden hover:bg-gray-100 rounded-xl"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                        <X className="h-5 w-5 text-gray-500" />
+                    </Button>
                 </div>
 
                 <div className="border-b border-primary mx-4 mb-6"></div>
@@ -116,7 +155,7 @@ export function DashboardLayout() {
                                 Accredited Journalists
                             </NavLink>
                         )}
-                                {/* Workflow Builder - 'workflow:config:view' */}
+                        {/* Workflow Builder - 'workflow:config:view' */}
                         {checkPermission('workflow:config:view') && (
                             <NavLink
                                 to={`${basePath}/workflow`}
@@ -133,7 +172,7 @@ export function DashboardLayout() {
                                 Workflow Builder
                             </NavLink>
                         )}
-     {/* Permissions - 'permission:matrix:view' */}
+                        {/* Permissions - 'permission:matrix:view' */}
                         {checkPermission('permission:matrix:view') && (
                             <NavLink
                                 to={`${basePath}/permissions`}
@@ -150,8 +189,8 @@ export function DashboardLayout() {
                                 Permissions
                             </NavLink>
                         )}
-                
-                  {/* Form Builder - 'form:view:all' */}
+
+                        {/* Form Builder - 'form:view:all' */}
                         {checkPermission('form:view:all') && (
                             <NavLink
                                 to={`${basePath}/form-builder`}
@@ -188,7 +227,7 @@ export function DashboardLayout() {
                         )}
 
 
-      
+
                         {/* Organizations - 'organization:view:all' */}
                         {checkPermission('organization:view:all') && (
                             <NavLink
@@ -225,9 +264,9 @@ export function DashboardLayout() {
                             </NavLink>
                         )}
 
-                
 
-                   
+
+
 
                         {/* Email Templates */}
                         {(user?.role === UserRole.SUPER_ADMIN) && (
@@ -281,7 +320,7 @@ export function DashboardLayout() {
                                 Invitation Templates
                             </NavLink>
                         )}
-        {/* Invitation Letters */}
+                        {/* Invitation Letters */}
                         {checkPermission('application:view:approved') && (
                             <NavLink
                                 to={`${basePath}/invitations`}
@@ -348,11 +387,13 @@ export function DashboardLayout() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 md:ml-64 p-8 flex flex-col min-h-screen">
-                <Outlet />
+            <main className="flex-1 md:ml-72 pt-20 md:pt-4 p-4 md:p-8 flex flex-col min-h-screen">
+                <div className="max-w-[1600px] w-full mx-auto">
+                    <Outlet />
+                </div>
 
-                <footer className="mt-auto pt-12 text-center text-sm text-gray-500 font-medium">
-                    © 2025 Ethiopian Media Association. All rights reserved.
+                <footer className="mt-auto pt-12 pb-6 text-center text-xs text-gray-400 font-medium tracking-wide">
+                    © 2025 African Union Accreditation Portal. All rights reserved.
                 </footer>
             </main>
         </div >

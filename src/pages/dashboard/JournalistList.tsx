@@ -1,24 +1,39 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_JOURNALISTS } from '@/data/mock';
 import { Button } from '@/components/ui/button';
 import { Search, Filter, Eye, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/auth/context';
 import { Card, CardContent } from '@/components/ui/card';
 import { CountrySelect } from '@/components/ui/country-select';
-import { getFlagEmoji } from '@/lib/utils';
 import en from 'react-phone-number-input/locale/en';
 import { exportJournalistsToCSV, exportJournalistsToPDF } from '@/lib/export-utils';
-import { useGetApplicationsQuery, Application } from '@/store/services/api';
+import { useGetApplicationsQuery, useGetWorkflowApplicationsQuery } from '@/store/services/api';
 
 export function JournalistList() {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCountry, setSelectedCountry] = useState('');
 
-    const { checkPermission } = useAuth();
-    // API Query
-    const { data: apiData, isLoading, isError } = useGetApplicationsQuery({ page: 1, limit: 50 });  // Fetch more for list view, eventually implement server-side pagination
+    const { checkPermission, user } = useAuth();
+
+    // Conditional API Query based on user role
+    const isSuperAdmin = user?.roleName === 'SUPER_ADMIN';
+
+    // Use workflow API for non-super-admin users
+    const { data: workflowData, isLoading: isWorkflowLoading, isError: isWorkflowError } = useGetWorkflowApplicationsQuery(
+        { page: 1, limit: 50, search: searchTerm },
+        { skip: isSuperAdmin } // Skip this query if user is super admin
+    );
+
+    // Use regular API for super admin
+    const { data: regularData, isLoading: isRegularLoading, isError: isRegularError } = useGetApplicationsQuery(
+        { page: 1, limit: 50 },
+        { skip: !isSuperAdmin } // Skip this query if user is NOT super admin
+    );
+
+    // Select the appropriate data based on role
+    const apiData = isSuperAdmin ? regularData : workflowData;
+    const isLoading = isSuperAdmin ? isRegularLoading : isWorkflowLoading;
 
     const countryName = (code: string) => code ? en[code as keyof typeof en] || code : 'Unknown';
 
@@ -93,7 +108,7 @@ export function JournalistList() {
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        onClick={() => exportJournalistsToCSV(filteredData as any, 'journalists_list.csv')} // Cast for now as export utils mock-typed
+                        onClick={() => exportJournalistsToCSV(filteredData as any)}
                         className="gap-2"
                     >
                         <Download className="h-4 w-4" />
@@ -101,7 +116,7 @@ export function JournalistList() {
                     </Button>
                     <Button
                         variant="outline"
-                        onClick={() => exportJournalistsToPDF(filteredData as any, 'journalists_list.pdf', 'Journalists List')}
+                        onClick={() => exportJournalistsToPDF(filteredData as any)}
                         className="gap-2"
                     >
                         <Download className="h-4 w-4" />
@@ -112,8 +127,8 @@ export function JournalistList() {
 
             {/* Filter Section */}
             <Card className="bg-white border-0 shadow-sm">
-                <CardContent className="p-6">
-                    <div className="flex items-end justify-between gap-4">
+                <CardContent className="p-4 md:p-6">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-500">Search</label>
@@ -144,19 +159,19 @@ export function JournalistList() {
             </Card>
 
             {/* Table */}
-            <Card className="border-0 shadow-sm">
-                <div className="relative w-full overflow-auto">
-                    <table className="w-full caption-bottom text-sm">
+            <Card className="border-0 shadow-sm overflow-hidden bg-white">
+                <div className="relative w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+                    <table className="w-full caption-bottom text-sm min-w-[800px]">
                         <thead className="[&_tr]:border-b bg-gray-50/50">
                             <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">No</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">JOURNALIST</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">COUNTRY</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden sm:table-cell">COUNTRY</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">PASSPORT NO</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">SUBMISSION DATE</th>
-                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">ETHIOPIA MEDIA<br />AUTHORITY</th>
-                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">IMMIGRATION<br />AND<br />CITIZENSHIP</th>
-                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">CUSTOMS</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden md:table-cell">SUBMISSION DATE</th>
+                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">EMA STATUS</th>
+                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden xl:table-cell">IMMIGRATION</th>
+                                <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden xl:table-cell">CUSTOMS</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">ACTION</th>
                             </tr>
                         </thead>
@@ -183,34 +198,33 @@ export function JournalistList() {
                                             <div className="font-bold text-gray-900">{fullName}</div>
                                             <div className="text-xs text-gray-500">{occupation}</div>
                                         </td>
-                                        <td className="p-4 align-middle">
+                                        <td className="p-4 align-middle hidden sm:table-cell">
                                             <div className="flex items-center gap-2 font-bold text-gray-700">
                                                 {countryName(country)}
                                             </div>
                                         </td>
                                         <td className="p-4 align-middle font-bold text-gray-700">{passport}</td>
-                                        <td className="p-4 align-middle font-bold text-gray-600 flex items-center gap-2">
-                                            <span className="text-blue-400">📅</span> {submissionDate}
+                                        <td className="p-4 align-middle font-bold text-gray-600 hidden md:table-cell">
+                                            <span className="text-blue-400 mr-2">📅</span> {submissionDate}
                                         </td>
-
                                         {/* EMA Status */}
                                         <td className="p-4 align-middle text-center">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(emaStatus)}`}>
-                                                <span className={`h-2 w-2 rounded-full ${getStatusDot(emaStatus)}`} />
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${getStatusColor(emaStatus)} border`}>
+                                                <span className={`h-1.5 w-1.5 rounded-full ${getStatusDot(emaStatus)}`} />
                                                 {emaStatus}
                                             </span>
                                         </td>
                                         {/* Immigration Status */}
-                                        <td className="p-4 align-middle text-center">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(immStatus)}`}>
-                                                <span className={`h-2 w-2 rounded-full ${getStatusDot(immStatus)}`} />
+                                        <td className="p-4 align-middle text-center hidden xl:table-cell">
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${getStatusColor(immStatus)} border`}>
+                                                <span className={`h-1.5 w-1.5 rounded-full ${getStatusDot(immStatus)}`} />
                                                 {immStatus}
                                             </span>
                                         </td>
                                         {/* Customs Status */}
-                                        <td className="p-4 align-middle text-center">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(custStatus)}`}>
-                                                <span className={`h-2 w-2 rounded-full ${getStatusDot(custStatus)}`} />
+                                        <td className="p-4 align-middle text-center hidden xl:table-cell">
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${getStatusColor(custStatus)} border`}>
+                                                <span className={`h-1.5 w-1.5 rounded-full ${getStatusDot(custStatus)}`} />
                                                 {custStatus}
                                             </span>
                                         </td>
@@ -236,10 +250,12 @@ export function JournalistList() {
                     </table>
                 </div>
                 {/* Pagination (Static for now, but wired to display) */}
-                <div className="p-4 border-t flex items-center justify-end gap-2">
-                    <span className="text-sm text-gray-500 mr-4">Page {apiData?.currentPage || 1} of {apiData?.totalPages || 1}</span>
-                    <Button variant="outline" size="sm" disabled={apiData?.currentPage === 1} className="h-8 w-16">Prev</Button>
-                    <Button variant="outline" size="sm" disabled={!apiData?.totalPages || apiData.currentPage >= apiData.totalPages} className="h-8 w-16">Next</Button>
+                <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <span className="text-sm text-gray-500">Page {apiData?.currentPage || 1} of {apiData?.totalPages || 1}</span>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" disabled={apiData?.currentPage === 1} className="h-8 w-16">Prev</Button>
+                        <Button variant="outline" size="sm" disabled={!apiData?.totalPages || apiData.currentPage >= apiData.totalPages} className="h-8 w-16">Next</Button>
+                    </div>
                 </div>
             </Card>
         </div>

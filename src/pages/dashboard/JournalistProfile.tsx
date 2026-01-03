@@ -10,19 +10,21 @@ import { SystemCheckSuccess } from '@/components/SystemCheckSuccess';
 import { exportJournalistDetailToPDF } from '@/lib/export-utils';
 import { useAuth, UserRole } from '@/auth/context';
 import { MOCK_JOURNALISTS } from '@/data/mock';
-import { useUpdateApplicationStatusMutation, Equipment as EquipmentType } from '@/store/services/api';
+import { useApproveWorkflowStepMutation, Equipment as EquipmentType } from '@/store/services/api';
 import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
 
 export function JournalistProfile() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
-
-    // Status Mutation
-    const [updateStatus, { isLoading: isStatusUpdating }] = useUpdateApplicationStatusMutation();
+console.log(user);
+    // Workflow Mutation
+    const [approveWorkflow, { isLoading: isStatusUpdating }] = useApproveWorkflowStepMutation();
 
     const [application, setApplication] = useState<any>(null);
+    const [notes, setNotes] = useState('');
 
     useEffect(() => {
         if (location.state?.application) {
@@ -63,14 +65,32 @@ export function JournalistProfile() {
     const [showSystemCheck, setShowSystemCheck] = useState(false);
     const countryName = (code: string) => code ? (en[code as keyof typeof en] || code) : 'Unknown';
 
-    const handleApprove = async () => {
+    const handleDecision = async (status: 'APPROVED' | 'REJECTED') => {
         if (!application) return;
+
+        // Ensure we have a workflow key
+        const stepKey = user?.workflowStepKey;
+console.log(stepKey);
+        if (!stepKey) {
+            toast.error("You don't have a workflow key assigned to your role.");
+            return;
+        }
+
+        const effectiveStepKey = stepKey || 'super_admin'; // Fallback for super admin if needed, or handle specifically
+
         try {
-            await updateStatus({ applicationId: Number(application.id), status: 'APPROVED' }).unwrap();
-            toast.success("Application Approved Successfully");
-            setApplication({ ...application, status: 'APPROVED' });
-        } catch (err) {
-            toast.error("Failed to approve application");
+            await approveWorkflow({
+                applicationId: Number(application.id),
+                stepKey: effectiveStepKey,
+                status,
+                notes
+            }).unwrap();
+
+            toast.success(`Application ${status.toLowerCase()} successfully`);
+            setApplication({ ...application, status: status === 'APPROVED' ? 'APPROVED' : 'REJECTED' });
+            setNotes('');
+        } catch (err: any) {
+            toast.error(err?.data?.message || `Failed to ${status.toLowerCase()} application`);
         }
     };
 
@@ -92,9 +112,7 @@ export function JournalistProfile() {
     const organization = "News Org"; // Placeholder or from API if avail
 
     // Authorization
-    const canApprove = user?.role === UserRole.SUPER_ADMIN ||
-        user?.role === UserRole.ICS_OFFICER ||
-        user?.role === UserRole.EMA_OFFICER;
+    const canApprove = user?.role === UserRole.SUPER_ADMIN || !!user?.workflowStepKey;
     const isCustoms = user?.role === UserRole.CUSTOMS_OFFICER;
 
     return (
@@ -124,27 +142,27 @@ export function JournalistProfile() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Main Content - Left */}
-                <div className="lg:col-span-8 space-y-6">
+                <div className="lg:col-span-8 space-y-6 order-2 lg:order-1">
                     {/* Basic Info Card */}
                     <Card className="bg-white border-0 shadow-sm">
-                        <CardContent className="p-6 flex items-start gap-4">
-                            <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-200">
+                        <CardContent className="p-4 md:p-6 flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+                            <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                                 <img src={photoUrl} alt={fullname} className="h-full w-full object-cover" />
                             </div>
-                            <div>
+                            <div className="flex-1 w-full">
                                 <h3 className="text-xl font-bold text-gray-900">{fullname}</h3>
                                 <div className="text-gray-500 text-sm flex flex-col gap-1 mt-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-center sm:justify-start gap-2">
                                         <Briefcase className="h-3 w-3" />
                                         <span>{roleTitle}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-center sm:justify-start gap-2">
                                         <span className="text-lg leading-none">{getFlagEmoji(country)}</span>
                                         <span>{countryName(country)}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
                                 <span>• {organization}</span>
                             </div>
                         </CardContent>
@@ -179,7 +197,7 @@ export function JournalistProfile() {
                                     <CardTitle className="text-lg font-bold">Personal Details</CardTitle>
                                     <User className="h-5 w-5 text-blue-600" />
                                 </CardHeader>
-                                <CardContent className="grid grid-cols-4 gap-6 pt-4">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">FULL NAME</p><p className="text-sm font-bold text-gray-900 mt-1">{fullname}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">DOB</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.date_of_birth || 'N/A'}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">GENDER</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.gender || 'N/A'}</p></div>
@@ -188,7 +206,7 @@ export function JournalistProfile() {
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">COUNTRY OF BIRTH</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(formData.country_of_birth)}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">CITIZENSHIP</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.citizenship || countryName(country)}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">OCCUPATION</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.occupation || 'N/A'}</p></div>
-                                    <div className="col-span-4"><p className="text-xs font-bold text-gray-400 uppercase">ADDRESS</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.address_line_1}, {formData.address_line_2 ? `${formData.address_line_2}, ` : ''}{formData.city}, {formData.state_province_region ? `${formData.state_province_region}, ` : ''}{formData.zip_postal_code}</p></div>
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-4"><p className="text-xs font-bold text-gray-400 uppercase">ADDRESS</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.address_line_1}, {formData.address_line_2 ? `${formData.address_line_2}, ` : ''}{formData.city}, {formData.state_province_region ? `${formData.state_province_region}, ` : ''}{formData.zip_postal_code}</p></div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -200,7 +218,7 @@ export function JournalistProfile() {
                                     <CardTitle className="text-lg font-bold">Contact Info</CardTitle>
                                     <Phone className="h-5 w-5 text-teal-500" />
                                 </CardHeader>
-                                <CardContent className="grid grid-cols-4 gap-6 pt-4">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">EMAIL</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.email}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">PHONE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.phone}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">ZIP CODE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.zip_postal_code || 'N/A'}</p></div>
@@ -215,7 +233,7 @@ export function JournalistProfile() {
                                     <CardTitle className="text-lg font-bold">Passport Information</CardTitle>
                                     <FileText className="h-5 w-5 text-yellow-500" />
                                 </CardHeader>
-                                <CardContent className="grid grid-cols-4 gap-6 pt-4">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">PASSPORT NO</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_number}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUING COUNTRY</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(country)}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_issue_date || 'N/A'}</p></div>
@@ -231,17 +249,17 @@ export function JournalistProfile() {
                                     <CardTitle className="text-lg font-bold">Arrival Information</CardTitle>
                                     <Plane className="h-5 w-5 text-green-500" />
                                 </CardHeader>
-                                <CardContent className="grid grid-cols-4 gap-6 pt-4">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">ARRIVAL DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.arrival_date}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_date || 'N/A'}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">FLIGHT</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.airlines_and_flight_number || 'N/A'}</p></div>
                                     <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE CITY</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_country_and_city || 'N/A'}</p></div>
 
-                                    <div className="col-span-2">
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-2">
                                         <p className="text-xs font-bold text-gray-400 uppercase">ACCOMMODATION</p>
                                         <p className="text-sm font-bold text-gray-900 mt-1">{formData.accommodation_details || 'N/A'}</p>
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-2">
                                         <p className="text-xs font-bold text-gray-400 uppercase">SPECIAL REQUIREMENTS</p>
                                         <p className="text-sm text-gray-700 mt-1">{formData.special_requirements || 'None'}</p>
                                     </div>
@@ -314,7 +332,7 @@ export function JournalistProfile() {
                 </div>
 
                 {/* Right Sidebar - Decision Panel */}
-                <div className="lg:col-span-4 space-y-6">
+                <div className="lg:col-span-4 space-y-6 order-1 lg:order-2">
                     <Card className="bg-white border-0 shadow-sm">
                         <CardHeader>
                             <div className="flex items-start gap-3">
@@ -328,16 +346,42 @@ export function JournalistProfile() {
                         <CardContent className="space-y-4">
                             <SystemCheckSuccess show={showSystemCheck} />
 
-                            {canApprove && (
-                                <Button
-                                    className="w-full bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
-                                    onClick={handleApprove}
-                                    disabled={isStatusUpdating || application.status === 'APPROVED'}
-                                >
-                                    {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                                    {application.status === 'APPROVED' ? 'Approved' : 'Approve Application'}
-                                </Button>
-                            )}
+                            {/* {canApprove && ( */}
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Decision Notes</label>
+                                        <Textarea
+                                            placeholder="Enter approval/rejection notes..."
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            className="min-h-[100px] text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            className="flex-1 bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
+                                            onClick={() => handleDecision('APPROVED')}
+                                            disabled={isStatusUpdating || application.status === 'APPROVED'}
+                                        >
+                                            {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                            {application.status === 'APPROVED' ? 'Approved' : 'Approve'}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold shadow-sm"
+                                            onClick={() => handleDecision('REJECTED')}
+                                            disabled={isStatusUpdating || application.status === 'APPROVED'}
+                                        >
+                                            <X className="h-4 w-4 mr-2" /> Reject
+                                        </Button>
+                                    </div>
+                                    {user?.workflowStepKey && (
+                                        <p className="text-[10px] text-center text-gray-500">
+                                            Acting as: <span className="font-bold uppercase">{user.workflowStepKey}</span>
+                                        </p>
+                                    )}
+                                </div>
+                            {/* )} */}
 
                             {isCustoms && (
                                 <>
@@ -353,7 +397,7 @@ export function JournalistProfile() {
                                 </>
                             )}
 
-                            {!canApprove && !isCustoms && (
+                            {!canApprove && (
                                 <div className="bg-gray-100 p-3 rounded-md text-sm text-gray-600 text-center">
                                     Read-only view for this role.
                                 </div>

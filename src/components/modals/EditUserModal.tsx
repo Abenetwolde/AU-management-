@@ -65,7 +65,7 @@ export function EditUserModal({ open, onOpenChange, user, onConfirm }: EditUserM
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="max-w-full sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle>Edit User</DialogTitle>
                     <DialogDescription>

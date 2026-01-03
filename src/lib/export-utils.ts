@@ -85,10 +85,16 @@ export function exportToPDF(
 export function exportJournalistsToCSV(journalists: any[]) {
     const data = journalists.map(j => ({
         'Full Name': j.user?.fullName || j.fullname || 'N/A',
+        'Email': j.user?.email || j.email || 'N/A',
+        'Phone': j.formData?.phone || 'N/A',
         'Country': j.formData?.country || j.country || 'N/A',
         'Passport No': j.formData?.passport_number || j.passportNo || 'N/A',
-        'Role': j.formData?.occupation || j.role || 'N/A',
-        'Status': j.status || 'N/A',
+        'Occupation': j.formData?.occupation || j.role || 'N/A',
+        'Arrival Date': j.formData?.arrival_date || 'N/A',
+        'Accommodation': j.formData?.accommodation_details || 'N/A',
+        'EMA Status': j.status || 'N/A',
+        'Immigration Status': j.immigrationStatus || 'N/A',
+        'Customs Status': j.equipmentStatus || 'N/A',
         'Submission Date': j.createdAt ? new Date(j.createdAt).toLocaleDateString() : 'N/A'
     }));
 
@@ -101,23 +107,182 @@ export function exportJournalistsToCSV(journalists: any[]) {
 export function exportJournalistsToPDF(journalists: any[]) {
     const columns: ExportColumn[] = [
         { header: 'Full Name', key: 'fullname' },
+        { header: 'Email', key: 'email' },
         { header: 'Country', key: 'country' },
         { header: 'Passport No', key: 'passportNo' },
-        { header: 'Role', key: 'role' },
-        { header: 'Status', key: 'status' },
-        { header: 'Date', key: 'date' }
+        { header: 'Occupation', key: 'role' },
+        { header: 'Arrival', key: 'arrival' },
+        { header: 'Status', key: 'status' }
     ];
 
     const data = journalists.map(j => ({
         fullname: j.user?.fullName || j.fullname || 'N/A',
+        email: j.user?.email || j.email || 'N/A',
         country: j.formData?.country || j.country || 'N/A',
         passportNo: j.formData?.passport_number || j.passportNo || 'N/A',
         role: j.formData?.occupation || j.role || 'N/A',
-        status: j.status || 'N/A',
-        date: j.createdAt ? new Date(j.createdAt).toLocaleDateString() : 'N/A'
+        arrival: j.formData?.arrival_date || 'N/A',
+        status: j.status || 'N/A'
     }));
 
-    exportToPDF(data, columns, 'journalists_list', 'Journalist List');
+    const filename = generateFilename('journalists_list', 'pdf');
+    const doc = new jsPDF('landscape'); // Use landscape for more columns
+
+    doc.setFontSize(16);
+    doc.text('Journalist List', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+    autoTable(doc, {
+        head: [columns.map(col => col.header)],
+        body: data.map(row => columns.map(col => String((row as any)[col.key] || ''))),
+        startY: 28,
+        styles: { fontSize: 7 }, // Smaller font to fit
+        headStyles: { fillColor: [0, 155, 77] },
+    });
+
+    doc.save(filename);
+}
+
+/**
+ * Export Dashboard Analytics to CSV
+ */
+export function exportDashboardAnalyticsToCSV(title: string, kpis: any, charts: any) {
+    const csvRows = [];
+    csvRows.push([title]);
+    csvRows.push([`Generated: ${new Date().toLocaleString()}`]);
+    csvRows.push([]);
+
+    // KPIs
+    csvRows.push(['KEY METRICS']);
+    csvRows.push(['Metric', 'Value', 'Relative %']);
+    Object.values(kpis).forEach((kpi: any) => {
+        csvRows.push([kpi.label, kpi.value, `${kpi.percentage || 0}%`]);
+    });
+    csvRows.push([]);
+
+    // Chart Data - Time Series
+    if (charts.timeSeries) {
+        csvRows.push(['APPLICATION TRENDS (TIME SERIES)']);
+        csvRows.push(['Date', 'Count']);
+        charts.timeSeries.forEach((item: any) => {
+            csvRows.push([item.date, item.count]);
+        });
+        csvRows.push([]);
+    }
+
+    // Chart Data - Status
+    if (charts.statusDistribution) {
+        csvRows.push(['STATUS DISTRIBUTION']);
+        csvRows.push(['Status', 'Count']);
+        charts.statusDistribution.forEach((item: any) => {
+            csvRows.push([item.status || item.name, item.count || item.value]);
+        });
+    }
+
+    const csvContent = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${title.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+/**
+ * Export Dashboard Analytics to PDF
+ */
+export function exportDashboardAnalyticsToPDF(title: string, kpis: any, charts: any) {
+    const doc = new jsPDF();
+    const filename = generateFilename(title.toLowerCase().replace(/\s+/g, '_'), 'pdf');
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(0, 155, 77); // AU Green
+    doc.text(title, 14, 15);
+
+    // Date
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+    let y = 35;
+
+    // KPIs Table
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59); // Slate 800
+    doc.text('Key Performance Indicators', 14, y);
+    y += 5;
+
+    const kpiData = Object.values(kpis).map((kpi: any) => [
+        kpi.label,
+        String(kpi.value),
+        `${kpi.percentage || 0}%`,
+        kpi.trend || 'N/A'
+    ]);
+
+    autoTable(doc, {
+        startY: y,
+        head: [['Metric', 'Value', 'Relative %', 'Trend']],
+        body: kpiData,
+        headStyles: { fillColor: [0, 155, 77] },
+    });
+
+    y = (doc as any).lastAutoTable.finalY + 15;
+
+    // Status Table
+    if (charts.statusDistribution) {
+        if (y > 200) { doc.addPage(); y = 20; }
+        doc.setFontSize(14);
+        doc.text('Status Distribution', 14, y);
+        y += 5;
+
+        const statusData = charts.statusDistribution.map((item: any) => [
+            item.status || item.name,
+            String(item.count || item.value)
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['Status', 'Count']],
+            body: statusData,
+            headStyles: { fillColor: [0, 155, 77] },
+        });
+        y = (doc as any).lastAutoTable.finalY + 15;
+    }
+
+    // Time Series Table
+    if (charts.timeSeries) {
+        if (y > 200) { doc.addPage(); y = 20; }
+        doc.setFontSize(14);
+        doc.text('Application Trends', 14, y);
+        y += 5;
+
+        const timeData = charts.timeSeries.map((item: any) => [
+            item.date,
+            String(item.count)
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['Date', 'Applications']],
+            body: timeData,
+            headStyles: { fillColor: [0, 155, 77] },
+        });
+    }
+
+    // Footer with Page Numbers
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+    }
+
+    doc.save(filename);
 }
 
 /**

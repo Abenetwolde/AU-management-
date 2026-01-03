@@ -26,7 +26,7 @@ import { Toaster } from 'sonner';
 
 import { useEffect } from 'react';
 import { initEmailJS } from './lib/emailService';
-import SuperAdminDashboard from './pages/dashboard/SuperAdminDashboard';
+import DashboardIndex from './pages/dashboard/DashboardIndex';
 
 function App() {
     useEffect(() => {
@@ -49,7 +49,7 @@ function App() {
                                     <Route index element={<Navigate to="admin" replace />} />
 
                                     {/* Consolidated Pages */}
-                                    <Route path="admin" element={<SuperAdminDashboard />} />
+                                    <Route path="admin" element={<DashboardIndex />} />
                                     <Route path="journalists" element={<JournalistList />} />
                                     <Route path="journalists/:id" element={<JournalistProfile />} />
                                     <Route path="accredited" element={<AccreditedJournalists />} />

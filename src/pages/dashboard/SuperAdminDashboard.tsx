@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Users, CheckCircle, Clock, XCircle, Calendar, ChevronDown,
+  Users, CheckCircle, Clock, XCircle, ChevronDown,
   Filter, Building2, Volume2, Plane, Shield, TrendingUp, Factory,
-  FileText, Package, Download, CalendarDays, LayoutDashboard, Eye
+  Package, LayoutDashboard, Eye, CalendarDays, Calendar,
+  Download as DownloadIcon, FileText as FileTextIcon
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend, BarChart, Bar } from 'recharts';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { type ClassValue, clsx } from "clsx";
@@ -17,8 +16,14 @@ import {
   useGetDashboardDataQuery,
   useGetUsersQuery,
   useGetOrganizationsQuery,
-  useGetApplicationsQuery
+  useGetApplicationsQuery,
+  useGetSuperAdminOverviewQuery,
+  useGetSuperAdminChartsQuery,
+  useGetSuperAdminStakeholdersQuery,
+  useGetSuperAdminStakeholderStatusQuery,
+  useGetSuperAdminPerformanceQuery
 } from '@/store/services/api';
+import { exportDashboardAnalyticsToCSV, exportDashboardAnalyticsToPDF } from '@/lib/export-utils';
 
 // --- UTILITY ---
 function cn(...inputs: ClassValue[]) {
@@ -98,10 +103,55 @@ export default function SuperAdminDashboard() {
   const [selectedForm, setSelectedForm] = useState<string>("all");
 
   // Dashboard Data
+  // Dashboard Data
   const { data: forms = [] } = useGetDashboardFormsQuery();
   const { data: dashboardData, isLoading: isDashboardLoading, isError: isDashboardError } = useGetDashboardDataQuery({
     formName: selectedForm === 'all' ? undefined : selectedForm
   });
+
+  // New Super Admin Data
+  const { data: overview, isLoading: isOverviewLoading } = useGetSuperAdminOverviewQuery();
+  const { data: adminCharts, isLoading: isChartsLoading } = useGetSuperAdminChartsQuery();
+  const { data: stakeholders, isLoading: isStakeholdersLoading } = useGetSuperAdminStakeholdersQuery();
+  const { data: stakeholderStatus, isLoading: isStatusLoading } = useGetSuperAdminStakeholderStatusQuery();
+  const { data: performanceData = [], isLoading: isPerformanceLoading } = useGetSuperAdminPerformanceQuery();
+
+  const [selectedStakeholder, setSelectedStakeholder] = useState<string>("");
+  const [appTrendRange, setAppTrendRange] = useState<'thisMonth' | 'lastMonth'>('thisMonth');
+
+  useEffect(() => {
+    if (performanceData.length > 0 && !selectedStakeholder) {
+      setSelectedStakeholder(performanceData[0].stakeholder);
+    }
+  }, [performanceData, selectedStakeholder]);
+
+  // Utility to filter data for a specific month
+  const filterByMonthRange = (data: any[], range: 'thisMonth' | 'lastMonth') => {
+    const now = new Date();
+    let targetMonth = now.getMonth();
+    let targetYear = now.getFullYear();
+
+    if (range === 'lastMonth') {
+      targetMonth -= 1;
+      if (targetMonth < 0) {
+        targetMonth = 11;
+        targetYear -= 1;
+      }
+    }
+
+    return (data || []).filter(item => {
+      const d = new Date(item.date);
+      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+    });
+  };
+
+  // Utility to format minutes
+  const formatMinutes = (minutes: number) => {
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return `${h}h ${m}m`;
+  };
 
   // Additional System Data
   const { data: users = [] } = useGetUsersQuery();
@@ -115,8 +165,8 @@ export default function SuperAdminDashboard() {
 
   if (!mounted) return null;
 
-  const isLoading = isDashboardLoading;
-  const isError = isDashboardError || !dashboardData;
+  const isLoading = isDashboardLoading || isOverviewLoading || isChartsLoading || isStakeholdersLoading || isStatusLoading || isPerformanceLoading;
+  const isError = isDashboardError || !dashboardData || !overview || !adminCharts || !stakeholders || !stakeholderStatus || !performanceData;
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
@@ -138,13 +188,13 @@ export default function SuperAdminDashboard() {
   const handleZoomIn = () => setZoom(prev => Math.min(prev * 1.3, 8));
   const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.3, 1));
 
-  const donutData = [
-    { name: 'Rejected', value: dashboardData.journalistStatus.rejected.percentage, color: dashboardData.journalistStatus.rejected.color },
-    { name: 'Approved', value: dashboardData.journalistStatus.approved.percentage, color: dashboardData.journalistStatus.approved.color },
-    { name: 'Pending', value: dashboardData.journalistStatus.pending.percentage, color: dashboardData.journalistStatus.pending.color },
-  ];
-
-  const orgTotal = dashboardData.mediaOrganizationType.reduce((sum, org) => sum + org.count, 0);
+  const totalDistribution = adminCharts.statusDistribution.reduce((acc: number, curr: { count: number }) => acc + curr.count, 0);
+  const donutData = adminCharts.statusDistribution.map((item: { status: string; count: number }) => ({
+    name: item.status,
+    value: item.count,
+    percentage: Math.round((item.count / (totalDistribution || 1)) * 100),
+    color: item.status === 'APPROVED' ? '#10b981' : item.status === 'REJECTED' ? '#ef4444' : item.status === 'IN_REVIEW' ? '#f59e0b' : '#3b82f6'
+  }));
 
   const countryDataMap = new Map(dashboardData.countries.map(c => [c.code, c]));
 
@@ -158,6 +208,19 @@ export default function SuperAdminDashboard() {
       default: return Building2;
     }
   };
+  const selectedPerformance = performanceData.find(
+    p => p.stakeholder === selectedStakeholder
+  );
+
+  const thisMonthData = filterByMonthRange(
+    selectedPerformance?.trend || [],
+    'thisMonth'
+  );
+
+  const thisMonthAverage = thisMonthData.length
+    ? thisMonthData.reduce((sum, item) => sum + item.value, 0) /
+    thisMonthData.length
+    : 0;
 
   // Custom Chart Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -180,246 +243,7 @@ export default function SuperAdminDashboard() {
     return null;
   };
 
-  // Export to CSV function
-  const exportToCSV = () => {
-    if (!dashboardData) return;
-    const csvData: string[] = [];
-    const formName = dashboardData.form?.name || 'All Forms';
-
-    // Header
-    csvData.push('Dashboard Report - Media Accreditation Portal');
-    csvData.push(`Generated: ${new Date().toLocaleString()}`);
-    csvData.push(`Form Filter: ${formName}`);
-    csvData.push('');
-
-    // Key Metrics
-    csvData.push('KEY METRICS');
-    csvData.push('Metric,Value');
-    csvData.push(`Total Registered Journalists,${dashboardData.keyMetrics.totalRegistered.value}`);
-    csvData.push(`Fully Accredited,${dashboardData.keyMetrics.fullyAccredited.value} (${dashboardData.keyMetrics.fullyAccredited.progress}%)`);
-    csvData.push(`Pending Approval,${dashboardData.keyMetrics.pendingApproval.value}`);
-    csvData.push(`Total Rejected,${dashboardData.keyMetrics.totalRejected.value} (${dashboardData.keyMetrics.totalRejected.percentage}%)`);
-    csvData.push('');
-
-    // Journalist Status
-    csvData.push('JOURNALIST STATUS');
-    csvData.push('Status,Count,Percentage');
-    csvData.push(`Approved,${dashboardData.journalistStatus.approved.value},${dashboardData.journalistStatus.approved.percentage}%`);
-    csvData.push(`Rejected,${dashboardData.journalistStatus.rejected.value},${dashboardData.journalistStatus.rejected.percentage}%`);
-    csvData.push(`Pending,${dashboardData.journalistStatus.pending.value},${dashboardData.journalistStatus.pending.percentage}%`);
-    csvData.push('');
-
-    // Organization Types
-    csvData.push('MEDIA ORGANIZATION TYPES');
-    csvData.push('Organization Type,Count');
-    dashboardData.mediaOrganizationType.forEach(org => {
-      csvData.push(`${org.name},${org.count}`);
-    });
-    csvData.push('');
-
-    // Countries
-    csvData.push('GEOGRAPHIC DISTRIBUTION');
-    csvData.push('Country,Count,Code');
-    dashboardData.countries.forEach(country => {
-      csvData.push(`${country.name},${country.count},${country.code}`);
-    });
-    csvData.push('');
-
-    // Authority Decisions
-    csvData.push('DECISIONS & APPROVALS BY AUTHORITY');
-    csvData.push('Authority,Approved,Rejected,Visa Granted,Visa Denied,Entry Allowed,Entry Denied');
-    dashboardData.decisionsAndApprovals.forEach(auth => {
-      const approved = auth.approved || '';
-      const rejected = auth.rejected || '';
-      const visaGranted = auth.visaGranted || '';
-      const visaDenied = auth.visaDenied || '';
-      const allowedEntry = auth.allowedEntry || '';
-      const deniedEntry = auth.deniedEntry || '';
-      csvData.push(`${auth.authority},${approved},${rejected},${visaGranted},${visaDenied},${allowedEntry},${deniedEntry}`);
-    });
-    csvData.push('');
-
-    // Journalist Entries
-    csvData.push('JOURNALIST ENTRY TRENDS');
-    csvData.push('Date,Day,Total Entries,Foreign Entries');
-    dashboardData.journalistsEntered.forEach(entry => {
-      csvData.push(`${entry.date},${entry.day},${entry.total},${entry.foreign}`);
-    });
-
-    // Create and download CSV
-    const csvContent = csvData.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    const formSlug = formName.replace(/\s+/g, '-').toLowerCase();
-    link.setAttribute('download', `dashboard-report-${formSlug}-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Export to PDF function
-  const exportToPDF = () => {
-    if (!dashboardData) return;
-    const doc = new jsPDF();
-    let yPos = 20;
-    const formName = dashboardData.form?.name || 'All Forms';
-
-    // Title
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Dashboard Report - Media Accreditation Portal', 14, yPos);
-    yPos += 10;
-
-    // Date and Form Filter
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, yPos);
-    yPos += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Form Filter: ${formName}`, 14, yPos);
-    yPos += 15;
-
-    // Key Metrics Table
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Key Metrics', 14, yPos);
-    yPos += 8;
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Metric', 'Value']],
-      body: [
-        ['Total Registered Journalists', dashboardData.keyMetrics.totalRegistered.value.toString()],
-        ['Fully Accredited', `${dashboardData.keyMetrics.fullyAccredited.value} (${dashboardData.keyMetrics.fullyAccredited.progress}%)`],
-        ['Pending Approval', dashboardData.keyMetrics.pendingApproval.value.toString()],
-        ['Total Rejected', `${dashboardData.keyMetrics.totalRejected.value} (${dashboardData.keyMetrics.totalRejected.percentage}%)`],
-      ],
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-    yPos = (doc as any).lastAutoTable.finalY + 15;
-
-    // Journalist Status Table
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Journalist Status Distribution', 14, yPos);
-    yPos += 8;
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Status', 'Count', 'Percentage']],
-      body: [
-        ['Approved', dashboardData.journalistStatus.approved.value.toString(), `${dashboardData.journalistStatus.approved.percentage}%`],
-        ['Rejected', dashboardData.journalistStatus.rejected.value.toString(), `${dashboardData.journalistStatus.rejected.percentage}%`],
-        ['Pending', dashboardData.journalistStatus.pending.value.toString(), `${dashboardData.journalistStatus.pending.percentage}%`],
-      ],
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-    yPos = (doc as any).lastAutoTable.finalY + 15;
-
-    // Organization Types Table
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Media Organization Types', 14, yPos);
-    yPos += 8;
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Organization Type', 'Count']],
-      body: dashboardData.mediaOrganizationType.map(org => [org.name, org.count.toString()]),
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-    yPos = (doc as any).lastAutoTable.finalY + 15;
-
-    // Countries Table
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Geographic Distribution', 14, yPos);
-    yPos += 8;
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Country', 'Count', 'Code']],
-      body: dashboardData.countries.map(country => [country.name, country.count.toString(), country.code]),
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-    yPos = (doc as any).lastAutoTable.finalY + 15;
-
-    // Authority Decisions Table
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Decisions & Approvals by Authority', 14, yPos);
-    yPos += 8;
-
-    const decisionsBody = dashboardData.decisionsAndApprovals.map(auth => [
-      auth.authority,
-      auth.approved?.toString() || '-',
-      auth.rejected?.toString() || '-',
-      auth.visaGranted?.toString() || '-',
-      auth.visaDenied?.toString() || '-',
-      auth.allowedEntry?.toString() || '-',
-      auth.deniedEntry?.toString() || '-',
-    ]);
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Authority', 'Approved', 'Rejected', 'Visa Granted', 'Visa Denied', 'Entry Allowed', 'Entry Denied']],
-      body: decisionsBody,
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-      styles: { fontSize: 8 },
-    });
-    yPos = (doc as any).lastAutoTable.finalY + 15;
-
-    // Journalist Entries Table
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Journalist Entry Trends', 14, yPos);
-    yPos += 8;
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Date', 'Day', 'Total Entries', 'Foreign Entries']],
-      body: dashboardData.journalistsEntered.map(entry => [
-        entry.date,
-        entry.day,
-        entry.total.toString(),
-        entry.foreign.toString(),
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-
-    // Save PDF
-    const formSlug = formName.replace(/\s+/g, '-').toLowerCase();
-    doc.save(`dashboard-report-${formSlug}-${new Date().toISOString().split('T')[0]}.pdf`);
-  };
+  // Placeholder for internal functions that were removed
 
   if (!mounted) return null;
 
@@ -508,6 +332,7 @@ export default function SuperAdminDashboard() {
             </Card>
           </div>
 
+
           {/* Export Buttons with Event Filter */}
           <div className="flex items-center justify-end gap-3 mb-4">
             {/* Event Selector */}
@@ -532,27 +357,27 @@ export default function SuperAdminDashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={exportToCSV}
+              onClick={() => exportDashboardAnalyticsToCSV('Super Admin Dashboard', overview, adminCharts)}
               className="gap-2"
             >
-              <Download className="h-4 w-4" />
+              <DownloadIcon className="h-4 w-4" />
               Export CSV
             </Button>
             <Button
               variant="gradient"
               size="sm"
-              onClick={exportToPDF}
-              className="gap-2"
+              onClick={() => exportDashboardAnalyticsToPDF('Super Admin Dashboard', overview, adminCharts)}
+              className="gap-2 text-white"
             >
-              <FileText className="h-4 w-4" />
+              <FileTextIcon className="h-4 w-4" />
               Export PDF
             </Button>
           </div>
 
           {/* Filters Section */}
-          <Card className="border-0 shadow-sm glass-card animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          {/* <Card className="border-0 shadow-sm glass-card animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <CardContent className="p-4">
-              <div className="flex items-center gap-4 flex-wrap justify-between">
+              <div className="flex items-center gap-4 flex-wrap justify-wrap">
                 <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2.5 bg-white min-w-[200px] hover:border-blue-400 transition-colors">
                   <Calendar className="h-4 w-4 text-blue-500" />
                   <input
@@ -565,7 +390,7 @@ export default function SuperAdminDashboard() {
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[220px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
                     <option>All organizations</option>
-                    {dashboardData.filterOptions.organizations.map((org, i) => (
+                    {dashboardData?.filterOptions.organizations.map((org: string, i: number) => (
                       <option key={i} value={org}>{org}</option>
                     ))}
                   </select>
@@ -575,7 +400,7 @@ export default function SuperAdminDashboard() {
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[220px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
                     <option>All Countries</option>
-                    {dashboardData.filterOptions.countries.map((country, i) => (
+                    {dashboardData?.filterOptions.countries.map((country: string, i: number) => (
                       <option key={i} value={country}>{country}</option>
                     ))}
                   </select>
@@ -585,7 +410,7 @@ export default function SuperAdminDashboard() {
                 <div className="relative group">
                   <select className="appearance-none border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm bg-white outline-none min-w-[200px] text-slate-700 font-medium hover:border-blue-400 transition-colors cursor-pointer">
                     <option>All status</option>
-                    {dashboardData.filterOptions.statuses.map((status, i) => (
+                    {dashboardData?.filterOptions.statuses.map((status: string, i: number) => (
                       <option key={i} value={status}>{status}</option>
                     ))}
                   </select>
@@ -598,48 +423,45 @@ export default function SuperAdminDashboard() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            {/* Total Registered Journalists */}
+            {/* Total Applications */}
             <Card className="border-0 shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm relative">
               <CardContent className="p-6 relative">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-500 mb-1">Total Registered</p>
-                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{dashboardData.keyMetrics.totalRegistered.value}</h3>
+                    <p className="text-sm font-semibold text-slate-500 mb-1">{overview.totalApplications.label}</p>
+                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{overview.totalApplications.value}</h3>
                   </div>
                   <div className="p-3 bg-blue-100 rounded-2xl text-blue-600">
                     <Users className="h-6 w-6" />
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1 rounded-lg w-fit">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>Rising Activity</span>
+                <div className={`flex items-center gap-2 text-sm font-medium ${overview.totalApplications.trend === 'up' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'} px-3 py-1 rounded-lg w-fit`}>
+                  <TrendingUp className={`h-4 w-4 ${overview.totalApplications.trend === 'up' ? '' : 'rotate-180'}`} />
+                  <span>{overview.totalApplications.percentage}% Growth</span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Fully Accredited */}
+            {/* Approved Applications */}
             <Card className="border-0 shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm relative group">
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardContent className="p-6 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-500 mb-1">Fully Accredited</p>
-                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{dashboardData.keyMetrics.fullyAccredited.value}</h3>
+                    <p className="text-sm font-semibold text-slate-500 mb-1">{overview.approvedApplications.label}</p>
+                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{overview.approvedApplications.value}</h3>
                   </div>
                   <div className="p-3 bg-emerald-100 rounded-2xl text-emerald-600">
                     <CheckCircle className="h-6 w-6" />
                   </div>
                 </div>
-                <div className="mt-4">
-                  <div className="flex justify-between text-xs font-semibold mb-2">
-                    <span className="text-emerald-700">Completion Rate</span>
-                    <span className="text-emerald-700">{dashboardData.keyMetrics.fullyAccredited.progress}%</span>
-                  </div>
-                  <Progress value={dashboardData.keyMetrics.fullyAccredited.progress} className="h-2.5 bg-emerald-100" indicatorClassName="bg-emerald-500" />
+                <div className={`flex items-center gap-2 text-sm font-medium ${overview.approvedApplications.trend === 'up' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'} px-3 py-1 rounded-lg w-fit mt-4`}>
+                  <TrendingUp className={`h-4 w-4 ${overview.approvedApplications.trend === 'up' ? '' : 'rotate-180'}`} />
+                  <span>{overview.approvedApplications.percentage}% Growth</span>
                 </div>
               </CardContent>
             </Card>
@@ -650,128 +472,41 @@ export default function SuperAdminDashboard() {
               <CardContent className="p-6 relative">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-500 mb-1">Pending Approval</p>
-                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{String(dashboardData.keyMetrics.pendingApproval.value).padStart(2, '0')}</h3>
+                    <p className="text-sm font-semibold text-slate-500 mb-1">{overview.pendingApplications.label}</p>
+                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{String(overview.pendingApplications.value).padStart(2, '0')}</h3>
                   </div>
                   <div className="p-3 bg-amber-100 rounded-2xl text-amber-600">
                     <Clock className="h-6 w-6" />
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm font-medium text-amber-700 bg-amber-50 px-3 py-1 rounded-lg w-fit">
-                  <span>Needs Review</span>
-                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <div className={`flex items-center gap-2 text-sm font-medium ${overview.pendingApplications.trend === 'up' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'} px-3 py-1 rounded-lg w-fit`}>
+                  <Clock className="h-4 w-4" />
+                  <span>{overview.pendingApplications.percentage}% Pending</span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Total Rejected */}
+            {/* System Admins (Moved logic from summary) */}
             <Card className="border-0 shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardContent className="p-6 relative">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-500 mb-1">Total Rejected</p>
-                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{String(dashboardData.keyMetrics.totalRejected.value).padStart(2, '0')}</h3>
+                    <p className="text-sm font-semibold text-slate-500 mb-1">System Admins</p>
+                    <h3 className="text-4xl font-bold text-slate-900 tracking-tight">{users.length}</h3>
                   </div>
-                  <div className="p-3 bg-red-100 rounded-2xl text-red-600">
-                    <XCircle className="h-6 w-6" />
+                  <div className="p-3 bg-slate-100 rounded-2xl text-slate-600">
+                    <Shield className="h-6 w-6" />
                   </div>
                 </div>
-                <p className="text-sm font-medium text-red-600 bg-red-50 px-3 py-1 rounded-lg w-fit">
-                  {dashboardData.keyMetrics.totalRejected.percentage}% of applications
-                </p>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active System Users</div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Second Row: Journalist Status, Media Organization Type, and Countries */}
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            {/* Journalist Status - Donut Chart */}
-            <Card className="border-0 shadow-sm xl:col-span-2">
-              <CardHeader className="pb-3 border-b border-slate-50">
-                <CardTitle>Journalists Status</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-6">
-                  <div className="space-y-4 flex-shrink-0">
-                    {donutData.map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 text-sm">
-                        <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: item.color }} />
-                        <span className="font-medium text-slate-600">{item.name}</span>
-                        <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">{item.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex-1 flex items-center justify-center relative">
-                    <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie
-                          data={donutData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={90}
-                          paddingAngle={5}
-                          cornerRadius={5}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {donutData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                            borderRadius: '12px',
-                            border: 'none',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-3xl font-bold text-slate-800">{orgTotal}</span>
-                      <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Journalists</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Media Organization Type */}
-            <Card className="border-0 shadow-sm xl:col-span-1">
-              <CardHeader className="pb-3 border-b border-slate-50">
-                <CardTitle>Organization Type</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 pt-6">
-                {dashboardData.mediaOrganizationType.map((org, i) => {
-                  const percentage = (org.count / orgTotal) * 100;
-                  let indicatorColor = 'bg-slate-300';
-                  if (org.color === '#3b82f6') indicatorColor = 'bg-blue-500';
-                  else if (org.color === '#8b5cf6') indicatorColor = 'bg-purple-500';
-                  else if (org.color === '#f97316') indicatorColor = 'bg-orange-500';
-                  else if (org.color === '#000000') indicatorColor = 'bg-slate-800';
-
-                  return (
-                    <div key={i} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-semibold text-slate-700">{org.name}</span>
-                        <span className="font-bold text-slate-900">{String(org.count).padStart(2, '0')}</span>
-                      </div>
-                      <Progress
-                        value={percentage}
-                        className="h-2"
-                        indicatorClassName={indicatorColor}
-                      />
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
+          {/* First Row: Geographic Distribution & Stakeholder Performance */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: '0.3s' }}>
             {/* Lists of Country */}
-            <Card className="border-0 shadow-sm xl:col-span-2">
+            <Card className="border-0 shadow-sm h-full">
               <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-50">
                 <CardTitle>Geographic Distribution</CardTitle>
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
@@ -785,7 +520,7 @@ export default function SuperAdminDashboard() {
               </CardHeader>
               <CardContent className="p-6">
                 <div className="flex gap-6">
-                  <div className="h-[220px] relative bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 flex-1 shadow-inner">
+                  <div className="h-[320px] relative bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 flex-1 shadow-inner">
                     <ComposableMap
                       projection="geoMercator"
                       projectionConfig={{ scale: 160 * zoom, center: [20, 0] }}
@@ -854,201 +589,365 @@ export default function SuperAdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Stakeholder Performance Charts */}
+            <Card className="border-0 shadow-sm bg-white overflow-hidden h-full">
+              <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
+                <div className="flex flex-row items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Stakeholder Performance</CardTitle>
+                    <p className="text-xs text-slate-400 mt-1">Average Processing Time Trend (Current Month)</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-slate-900 leading-none">
+                      {formatMinutes(thisMonthAverage)}
+                    </p>
+
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Avg Process Time</p>
+                  </div>
+                </div>
+                <div className="relative group mt-3">
+                  <select
+                    value={selectedStakeholder}
+                    onChange={(e) => setSelectedStakeholder(e.target.value)}
+                    className="appearance-none w-full border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-xs bg-white outline-none font-medium hover:border-blue-400 transition-colors cursor-pointer"
+                  >
+                    {performanceData.map((p: { stakeholder: string }, i: number) => (
+                      <option key={i} value={p.stakeholder}>{p.stakeholder}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={filterByMonthRange(performanceData.find(p => p.stakeholder === selectedStakeholder)?.trend || [], 'thisMonth')}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                        tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { day: 'numeric' })}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                        tickFormatter={(value) => formatMinutes(value)}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                          borderRadius: '12px',
+                          border: 'none',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }}
+                        formatter={(value: number) => [formatMinutes(value), 'Avg Process Time']}
+                        labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorValue)"
+                        dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6, strokeWidth: 0 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Decisions and Approvals Section */}
-          <div className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
+          {/* Second Row: Application Trends & Stakeholder Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: '0.35s' }}>
+            {/* Application Trends - Time Series Chart */}
+            <Card className="border-0 shadow-sm h-full">
+              <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Application Trends</CardTitle>
+                  <p className="text-xs text-slate-400 mt-1">Daily submission volume</p>
+                </div>
+                <p className="text-md text-black font-semibold mt-1">Total: {filterByMonthRange(adminCharts.timeSeries, appTrendRange).reduce((acc: number, curr: { count: number }) => acc + curr.count, 0)}</p>
+                <div className="relative group">
+                  <select
+                    value={appTrendRange}
+                    onChange={(e) => setAppTrendRange(e.target.value as any)}
+                    className="appearance-none border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-xs bg-white outline-none font-medium hover:border-blue-400 transition-colors cursor-pointer"
+                  >
+                    <option value="thisMonth">This Month</option>
+                    <option value="lastMonth">Last Month</option>
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={filterByMonthRange(adminCharts.timeSeries, appTrendRange)}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#26f765ff" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#26f765ff" stopOpacity={0.3} />
+                        </linearGradient>
+                      </defs>
+
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleDateString('en-US', { day: 'numeric' })
+                        }
+                      />
+
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                      />
+
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                          borderRadius: '12px',
+                          border: 'none',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        }}
+                        labelFormatter={(label) =>
+                          new Date(label).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        }
+                      />
+
+                      <Bar
+                        dataKey="count"
+                        fill="url(#colorTrend)"
+                        radius={[6, 6, 0, 0]}
+                        barSize={18}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+
+            </Card>
+
+            {/* Stakeholder Analysis */}
+            <Card className="border-0 shadow-sm h-full bg-white">
+              <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
+                <CardTitle>Participant Institutional Background</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {stakeholders.map((org: { name: string; applicationsCount: number }, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">
+                          {org.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-700">{org.name}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Organization Type</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-blue-600">{org.applicationsCount}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">Apps</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Third Row: Journalists Status & Role Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+            {/* Journalist Status - Donut Chart */}
+            <Card className="border-0 shadow-sm h-full">
+              <CardHeader className="pb-3 border-b border-slate-50">
+                <CardTitle>Journalists Status</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-6">
+                  <div className="space-y-4 flex-shrink-0">
+                    {donutData.map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm">
+                        <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: item.color }} />
+                        <span className="font-medium text-slate-600">{item.name}</span>
+                        <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">{item.percentage}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex-1 flex items-center justify-center relative">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {donutData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            borderRadius: '12px',
+                            border: 'none',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-bold text-slate-800">{totalDistribution}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Total</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Role Distribution */}
+            <Card className="border-0 shadow-sm h-full">
+              <CardHeader className="pb-3 border-b border-slate-50">
+                <CardTitle>Role Distribution</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-6">
+                  <div className="flex-1 flex items-center justify-center relative">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={adminCharts.roleDistribution.map((role, i) => ({
+                            name: `${role.roleName.replace('_', ' ')} (${role.count})`,
+                            value: role.count,
+                            color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][i % 5]
+                          }))}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {adminCharts.roleDistribution.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            borderRadius: '12px',
+                            border: 'none',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                          }}
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Stakeholder Status Breakdown */}
+          <div className="animate-slide-up" style={{ animationDelay: '0.45s' }}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-800">Decisions & Approvals</h2>
+              <h2 className="text-2xl font-bold text-slate-800">Stakeholder Status Breakdown</h2>
             </div>
 
-            <div className="space-y-6">
-              {/* First Row: Ethiopian Media Authority, Immigration, Border Security */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {dashboardData.decisionsAndApprovals.filter(d =>
-                  d.authority === "Ethiopian Media Authority" ||
-                  d.authority === "Immigration and Citizenship Services" ||
-                  d.authority === "Border Security Officer"
-                ).map((decision, i) => {
-                  const IconComponent = getIcon(decision.icon);
-                  return (
-                    <Card key={i} className="relative overflow-hidden border-0 bg-white shadow-sm hover:shadow-md transition-all duration-300 group rounded-xl ring-1 ring-slate-100">
-                      <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: decision.color }} />
-                      <CardContent className="p-5 pl-7">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="font-bold text-slate-800 text-lg leading-tight pr-4">{decision.authority}</h3>
-                          <div className="p-2 rounded-lg bg-slate-50 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
-                            <IconComponent className="h-5 w-5" />
-                          </div>
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {Object.entries(stakeholderStatus).map(([name, status], i) => {
+                const data = [
+                  { name: 'Approved', value: status.APPROVED, color: '#10b981' },
+                  { name: 'Rejected', value: status.REJECTED, color: '#ef4444' },
+                  { name: 'Pending', value: status.PENDING, color: '#f59e0b' },
+                ];
+                const total = status.APPROVED + status.REJECTED + status.PENDING;
 
-                        <div className="grid grid-cols-2 gap-4">
-                          {decision.approved !== undefined ? (
-                            <>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Approved</p>
-                                <p className="text-xl font-bold text-slate-900">{decision.approved}</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rejected</p>
-                                <p className="text-xl font-bold text-slate-900">{decision.rejected}</p>
-                              </div>
-                            </>
-                          ) : decision.visaGranted !== undefined ? (
-                            <>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Visa Granted</p>
-                                <p className="text-xl font-bold text-slate-900">{decision.visaGranted}</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Visa Denied</p>
-                                <p className="text-xl font-bold text-slate-900">{String(decision.visaDenied).padStart(2, '0')}</p>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entry Allowed</p>
-                                <p className="text-xl font-bold text-slate-900">{decision.allowedEntry}</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entry Denied</p>
-                                <p className="text-xl font-bold text-slate-900">{String(decision.deniedEntry).padStart(2, '0')}</p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-
-              {/* Second Row: Customs, Chart, and INSA below Customs */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Customs and INSA stacked */}
-                <div className="space-y-6">
-                  {/* Customs Card */}
-                  {dashboardData.decisionsAndApprovals.filter(d => d.authority === "Customs").map((decision, i) => {
-                    const IconComponent = getIcon(decision.icon);
-                    return (
-                      <Card key={i} className="border border-slate-100 shadow-none hover:border-slate-300 transition-all duration-300 bg-white">
-                        <CardContent className="p-5">
-                          <div className="flex items-start gap-4 h-full">
-                            <div className="p-3.5 rounded-xl flex-shrink-0" style={{ backgroundColor: `${decision.color}15`, color: decision.color }}>
-                              <IconComponent className="h-6 w-6" />
-                            </div>
-                            <div className="flex-1 flex flex-col justify-center">
-                              <p className="font-bold text-base text-slate-800 mb-4 group-hover:text-blue-600 transition-colors">{decision.authority}</p>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 text-emerald-900">
-                                  <span className="text-xs font-semibold">Approved</span>
-                                  <span className="text-sm font-bold">{decision.approved}</span>
-                                </div>
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-red-50 text-red-900">
-                                  <span className="text-xs font-semibold">Rejected</span>
-                                  <span className="text-sm font-bold">{decision.rejected}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-
-                  {/* INSA Card below Customs */}
-                  {dashboardData.decisionsAndApprovals.filter(d => d.authority === "INSA").map((decision, i) => {
-                    const IconComponent = getIcon(decision.icon);
-                    return (
-                      <Card key={i} className="border border-slate-100 shadow-none hover:border-slate-300 transition-all duration-300 bg-white">
-                        <CardContent className="p-5">
-                          <div className="flex items-start gap-4 h-full">
-                            <div className="p-3.5 rounded-xl flex-shrink-0" style={{ backgroundColor: `${decision.color}15`, color: decision.color }}>
-                              <IconComponent className="h-6 w-6" />
-                            </div>
-                            <div className="flex-1 flex flex-col justify-center">
-                              <p className="font-bold text-base text-slate-800 mb-4 group-hover:text-blue-600 transition-colors">{decision.authority}</p>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 text-emerald-900">
-                                  <span className="text-xs font-semibold">Approved</span>
-                                  <span className="text-sm font-bold">{decision.approved}</span>
-                                </div>
-                                <div className="flex items-center justify-between p-2 rounded-lg bg-red-50 text-red-900">
-                                  <span className="text-xs font-semibold">Rejected</span>
-                                  <span className="text-sm font-bold">{decision.rejected}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-
-                {/* Right Side - Total Journalists Entered Chart */}
-                <div className="lg:col-span-2">
-                  <Card className="border-0 shadow-sm bg-white h-full hover:shadow-xl transition-all duration-300">
-                    <CardHeader className="pb-3 border-b border-slate-50 flex flex-row justify-between items-center">
-                      <CardTitle>Journalist Entry Trends</CardTitle>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="h-8">Weekly</Button>
-                        <Button size="sm" variant="ghost" className="h-8">Monthly</Button>
-                      </div>
+                return (
+                  <Card key={i} className="border-0 shadow-sm bg-white overflow-hidden group">
+                    <CardHeader className="pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
+                      <CardTitle className="text-sm border-l-4 pl-3" style={{ borderColor: '#3b82f6' }}>{name}</CardTitle>
+                      <span className="text-xs font-bold text-slate-400">Total: {total}</span>
                     </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="h-[320px]">
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <div className="flex-1 h-[140px] relative">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={dashboardData.journalistsEntered} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="colorPrimary" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                              </linearGradient>
-                              <linearGradient id="colorSecondary" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                            <XAxis
-                              dataKey="date"
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fontSize: 12, fontWeight: 600, fill: '#94a3b8' }}
-                              dy={10}
-                              tickFormatter={(value: string) => {
-                                const date = new Date(value);
-                                return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+                          <PieChart>
+                            <Pie
+                              data={data}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={35}
+                              outerRadius={50}
+                              paddingAngle={2}
+                              dataKey="value"
+                              stroke="none"
+                            >
+                              {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                borderRadius: '8px',
+                                border: 'none',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                               }}
                             />
-                            <YAxis
-                              yAxisId="left"
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fontSize: 11, fontWeight: 600, fill: '#94a3b8' }}
-                              domain={[0, 'auto']}
-                              label={{ value: 'Journalists', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 12 }}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Area
-                              yAxisId="left"
-                              type="monotone"
-                              dataKey="total"
-                              name="Total Entered"
-                              stroke="#3b82f6"
-                              strokeWidth={4}
-                              fill="url(#colorPrimary)"
-                            />
-                            <Legend iconType="circle" />
-                          </AreaChart>
+                          </PieChart>
                         </ResponsiveContainer>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <span className="text-lg font-bold text-slate-800">{String(Math.round((status.APPROVED / (total || 1)) * 100))}%</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2 flex-shrink-0">
+                        {data.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-[10px] font-bold">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-slate-500 w-12">{item.name}</span>
+                            <span className="text-slate-900">{item.value}</span>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1073,7 +972,7 @@ export default function SuperAdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {recentApplications.map((app) => (
+                    {recentApplications.map((app: any) => (
                       <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -1091,12 +990,12 @@ export default function SuperAdminDashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${app.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600' :
-                              app.status === 'REJECTED' ? 'bg-red-50 text-red-600' :
-                                'bg-amber-50 text-amber-600'
+                            app.status === 'REJECTED' ? 'bg-red-50 text-red-600' :
+                              'bg-amber-50 text-amber-600'
                             }`}>
                             <div className={`h-1.5 w-1.5 rounded-full ${app.status === 'APPROVED' ? 'bg-emerald-500' :
-                                app.status === 'REJECTED' ? 'bg-red-500' :
-                                  'bg-amber-500'
+                              app.status === 'REJECTED' ? 'bg-red-500' :
+                                'bg-amber-500'
                               }`} />
                             {app.status || 'PENDING'}
                           </span>
@@ -1126,10 +1025,10 @@ export default function SuperAdminDashboard() {
 
           {/* Footer */}
           <div className="text-center text-sm text-slate-400 py-8">
-            � 2025 Official Ethiopia Media Authority Portal. All rights reserved.
+            © 2025 Official Ethiopia Media Authority Portal. All rights reserved.
           </div>
         </div>
-      </main>
-    </div>
+      </main >
+    </div >
   );
 }
