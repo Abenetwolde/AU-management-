@@ -402,6 +402,26 @@ export function BadgeDesigner({ onSave, configId }: { onSave?: () => void; confi
                                     {selectedElement.type === 'text' && (
                                         <div className="space-y-4">
                                             <div className="space-y-2">
+                                                <Label className="text-xs">Text Color</Label>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        type="color"
+                                                        value={selectedElement.color || '#000000'}
+                                                        onChange={(e) => setElements(prev => prev.map(el =>
+                                                            el.id === selectedElementId ? { ...el, color: e.target.value } : el
+                                                        ))}
+                                                        className="h-8 w-12 p-0 border-none"
+                                                    />
+                                                    <Input
+                                                        value={selectedElement.color || '#000000'}
+                                                        onChange={(e) => setElements(prev => prev.map(el =>
+                                                            el.id === selectedElementId ? { ...el, color: e.target.value } : el
+                                                        ))}
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
                                                 <Label className="text-xs">Font Size ({selectedElement.fontSize || 12}px)</Label>
                                                 <Slider
                                                     value={[selectedElement.fontSize || 12]}
