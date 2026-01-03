@@ -14,7 +14,6 @@ import { UserManagement } from './pages/dashboard/UserManagement';
 import { EmailTemplates } from './pages/dashboard/EmailTemplates';
 import FormList from './pages/dashboard/FormList';
 import { FormEditor } from './pages/dashboard/FormEditor';
-import { BadgeTemplates } from './pages/dashboard/BadgeTemplates';
 import { SystemSettings } from './pages/dashboard/SystemSettings';
 import { PermissionManagement } from './pages/dashboard/PermissionManagement';
 import { RoleManagement } from './pages/dashboard/RoleManagement';
@@ -64,7 +63,6 @@ function App() {
                                     <Route path="forms/builder" element={<FormEditor />} />
                                     <Route path="forms/builder/:id" element={<FormEditor />} />
 
-                                    <Route path="badge-templates" element={<BadgeTemplates />} />
                                     <Route path="settings" element={<SystemSettings />} />
                                     <Route path="organizations" element={<OrganizationManagement />} />
                                     <Route path="invitations" element={<InvitationCenter />} />
