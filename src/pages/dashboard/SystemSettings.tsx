@@ -157,7 +157,7 @@ export function SystemSettings() {
     }
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto pb-10">
+        <div className="space-y-6 w-full pb-10">
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">System Settings</h1>
