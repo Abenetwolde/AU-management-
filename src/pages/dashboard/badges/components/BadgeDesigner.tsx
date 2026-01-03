@@ -246,11 +246,16 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
                     <div className="relative group">
                         <div
                             ref={canvasRef}
-                            className="bg-white shadow-2xl relative overflow-hidden transition-all duration-300"
-                            style={{ width: `${selectedTemplate.width}px`, height: `${selectedTemplate.height}px` }}
+                            className="bg-white shadow-2xl relative overflow-hidden transition-all duration-300 border border-slate-200"
+                            style={{
+                                width: `${selectedTemplate.width}px`,
+                                height: `${selectedTemplate.height}px`,
+                                fontFamily: selectedTemplate.name.includes('Premium') ? 'serif' : 'sans-serif'
+                            }}
                         >
-                            {/* Base Background Overlay (Optional) */}
-                            <div className="absolute inset-0 pointer-events-none opacity-10" style={{ backgroundColor: primaryColor }}></div>
+                            {/* Branding Shell */}
+                            <div className="absolute top-0 left-0 right-0 h-[15px]" style={{ backgroundColor: primaryColor }}></div>
+                            <div className="absolute bottom-10 left-0 right-0 h-[15px]" style={{ backgroundColor: primaryColor }}></div>
 
                             {/* Elements */}
                             {elements.map(el => (
