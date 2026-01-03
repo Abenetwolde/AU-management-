@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 
 export function LandingPageSettings() {
     const { data: settings, isLoading } = useGetLandingPageSettingsQuery();
+    console.log("settings===================", settings);
     const [createSettings, { isLoading: isSaving }] = useCreateLandingPageSettingsMutation();
     const [deleteSettings, { isLoading: isDeleting }] = useDeleteLandingPageSettingsMutation();
 
@@ -43,6 +44,14 @@ export function LandingPageSettings() {
     const [mainLogo, setMainLogo] = useState<File | null>(null);
     const [footerLogo, setFooterLogo] = useState<File | null>(null);
 
+    // Additional Config State
+    const [heroBackgroundUrl, setHeroBackgroundUrl] = useState('');
+    const [gallery, setGallery] = useState<string[]>([]);
+    const [heroSectionConfig, setHeroSectionConfig] = useState('');
+    const [processTrackerConfig, setProcessTrackerConfig] = useState('');
+    const [infoSectionConfig, setInfoSectionConfig] = useState('');
+    const [footerConfig, setFooterConfig] = useState('');
+
     // Initial load
     useEffect(() => {
         if (settings) {
@@ -52,7 +61,21 @@ export function LandingPageSettings() {
             setContactLink(settings.contactLink || '');
             setPrivacyPolicyContent(settings.privacyPolicyContent || '');
             setDeadlineDate(settings.deadlineDate ? new Date(settings.deadlineDate).toISOString().split('T')[0] : '');
-            setLanguages(settings.languages || []);
+
+            // Handle JSON fields safely
+            try {
+                setLanguages(typeof settings.languages === 'string' ? JSON.parse(settings.languages) : settings.languages || []);
+            } catch (e) { setLanguages([]); }
+
+            try {
+                setGallery(typeof settings.gallery === 'string' ? JSON.parse(settings.gallery) : settings.gallery || []);
+            } catch (e) { setGallery([]); }
+
+            setHeroBackgroundUrl(settings.heroBackgroundUrl || '');
+            setHeroSectionConfig(settings.heroSectionConfig || '');
+            setProcessTrackerConfig(settings.processTrackerConfig || '');
+            setInfoSectionConfig(settings.infoSectionConfig || '');
+            setFooterConfig(settings.footerConfig || '');
         }
     }, [settings]);
 
@@ -64,10 +87,28 @@ export function LandingPageSettings() {
         if (contactLink) formData.append('contactLink', contactLink);
         if (privacyPolicyContent) formData.append('privacyPolicyContent', privacyPolicyContent);
         if (deadlineDate) formData.append('deadlineDate', new Date(deadlineDate).toISOString());
-        if (languages.length > 0) formData.append('languages', JSON.stringify(languages));
 
+        // JSON Arrays/Objects
+        // formData.append('languages', JSON.stringify(languages));
+        formData.append('gallery', JSON.stringify(gallery));
+
+        // Configs (strings)
+        if (heroSectionConfig) formData.append('heroSectionConfig', heroSectionConfig);
+        if (processTrackerConfig) formData.append('processTrackerConfig', processTrackerConfig);
+        if (infoSectionConfig) formData.append('infoSectionConfig', infoSectionConfig);
+        if (footerConfig) formData.append('footerConfig', footerConfig);
+
+        // Files
         if (mainLogo) formData.append('mainLogo', mainLogo);
         if (footerLogo) formData.append('footerLogo', footerLogo);
+
+        // If heroBackgroundUrl is a file upload, we'd need a file state.
+        // Assuming it's a URL string or handled separately, but if it's an upload:
+        // For now, preserving existing string URL if not changed? 
+        // Only append if it's a new upload? 
+        // The user didn't specify heroBackground upload UI, just the field. 
+        // If it's a string URL:
+        if (heroBackgroundUrl) formData.append('heroBackgroundUrl', heroBackgroundUrl);
 
         try {
             await createSettings(formData).unwrap();

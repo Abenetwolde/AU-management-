@@ -3,15 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Search, RefreshCw, Download, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { CountrySelect } from '@/components/ui/country-select';
-import { getFlagEmoji } from '@/lib/utils';
-import en from 'react-phone-number-input/locale/en';
-import { exportJournalistsToCSV, exportJournalistsToPDF } from '@/lib/export-utils';
-import { useAuth, UserRole } from '@/auth/context';
 import {
     useGetApprovedApplicationsQuery,
     useUpdateApplicationStatusMutation,
-    ApplicationStatus,
-    Application
+    ApplicationStatus
 } from '@/store/services/api';
 import { toast } from 'sonner';
 import {
@@ -85,25 +80,11 @@ export function AccreditedJournalists() {
 
     // Export handlers
     const handleExportCSV = () => {
-        const exportData = filteredApplications.map(app => ({
-            id: app.id,
-            fullname: app.user.fullName,
-            country: app.formData.country,
-            passportNo: app.formData.passport_number,
-            status: app.status
-        }));
-        exportJournalistsToCSV(exportData as any);
+        exportJournalistsToCSV(filteredApplications);
     };
 
     const handleExportPDF = () => {
-        const exportData = filteredApplications.map(app => ({
-            id: app.id,
-            fullname: app.user.fullName,
-            country: app.formData.country,
-            passportNo: app.formData.passport_number,
-            status: app.status
-        }));
-        exportJournalistsToPDF(exportData as any);
+        exportJournalistsToPDF(filteredApplications);
     };
 
     if (isLoading) {
@@ -196,36 +177,35 @@ export function AccreditedJournalists() {
             </Card>
 
             {/* Table */}
-            <Card>
-                <div className="relative w-full overflow-auto">
+            <Card className="border-0 shadow-sm overflow-hidden bg-white">
+                <div className="relative w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
                     <table className="w-full caption-bottom text-sm">
                         <thead className="[&_tr]:border-b">
                             <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">No</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">FULLNAME</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">COUNTRY</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">PASSPORT NO</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">OCCUPATION</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">ARRIVAL</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">STATUS</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground text-right">ACTIONS</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs">No</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs">Fullname</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs hidden sm:table-cell">Country</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs hidden md:table-cell">Passport No</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs hidden lg:table-cell">Occupation</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs hidden xl:table-cell">Arrival</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs">Status</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground uppercase text-xs text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="[&_tr:last-child]:border-0">
                             {filteredApplications.map((application) => (
                                 <tr key={application.id} className="border-b transition-colors hover:bg-muted/50">
-                                    <td className="p-4 align-middle">{application.id}</td>
-                                    <td className="p-4 align-middle font-medium">{application.user.fullName}</td>
-                                    <td className="p-4 align-middle">
-                                        <span className="flex items-center gap-2 font-bold">
-                                            <span className="text-lg leading-none">{getFlagEmoji(application.formData.country)}</span>
+                                    <td className="p-4 align-middle text-gray-500">{application.id}</td>
+                                    <td className="p-4 align-middle font-bold text-slate-800">{application.user.fullName}</td>
+                                    <td className="p-4 align-middle hidden sm:table-cell">
+                                        <span className="flex items-center gap-2 font-medium text-slate-600">
                                             {countryName(application.formData.country)}
                                         </span>
                                     </td>
-                                    <td className="p-4 align-middle">{application.formData.passport_number}</td>
-                                    <td className="p-4 align-middle">{application.formData.occupation || 'N/A'}</td>
-                                    <td className="p-4 align-middle font-mono text-xs">
-                                        <div>{application.formData.arrival_date ? new Date(application.formData.arrival_date).toLocaleDateString() : 'N/A'}</div>
+                                    <td className="p-4 align-middle hidden md:table-cell font-medium text-slate-600">{application.formData.passport_number}</td>
+                                    <td className="p-4 align-middle hidden lg:table-cell text-slate-500">{application.formData.occupation || 'N/A'}</td>
+                                    <td className="p-4 align-middle hidden xl:table-cell">
+                                        <div className="text-slate-500 font-medium">{application.formData.arrival_date ? new Date(application.formData.arrival_date).toLocaleDateString() : 'N/A'}</div>
                                     </td>
                                     <td className="p-4 align-middle">
                                         {getStatusBadge(application.status as string)}

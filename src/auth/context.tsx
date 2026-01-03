@@ -27,13 +27,14 @@ interface User {
     email: string;
     role: UserRole;
     roleName?: string;
+    workflowStepKey?: string;
     gate?: string;
     permissions?: Permission[]; // For storing API permissions
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string) => void;
+    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string) => void;
     logout: () => void;
     isAuthenticated: boolean;
     checkPermission: (permissionKey: string) => boolean;
@@ -60,14 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return user.permissions.some(p => p.key === permissionKey);
     };
 
-    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string) => {
+    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string) => {
         // Use provided name/permissions if available (from API), otherwise default
         const newUser: User = {
-            id: '1234-AU',
+            id,
             name: fullName,
             email,
             role,
             roleName,
+            workflowStepKey,
             // gate: 'GATE 1',
             permissions
         };

@@ -171,11 +171,17 @@ export interface LandingPageSettings {
     description: string;
     mainLogoUrl: string | null;
     footerLogoUrl: string | null;
+    heroBackgroundUrl: string | null;
     deadlineDate: string | null;
     privacyPolicyContent: string;
     contactEmail: string;
     contactLink: string;
     languages: { name: string; code: string; flagEmoji: string }[];
+    gallery: string[];
+    heroSectionConfig: any;
+    processTrackerConfig: any;
+    infoSectionConfig: any;
+    footerConfig: any;
     createdAt: string;
     updatedAt: string;
 }
@@ -198,6 +204,142 @@ export interface EmailTemplatesResponse {
             totalPages: number;
         };
     };
+}
+
+// Workflow Types
+export interface WorkflowStep {
+    id: number;
+    name: string;
+    key: string; // Unique identifier like 'immigration_check'
+    description: string;
+    displayOrder: number;
+    isActive: boolean;
+    requiredRole: string | 'ICS' | 'SECURITY_OFFICER' | 'CUSTOM_OFFICER' | 'INSA_OFFICER' | 'MEDIA_LIAISON';
+    formId: number | null;
+    icon: string | null;
+    color: string | null; // Hex color code
+    dependencyType: 'ALL' | 'ANY' | 'NONE';
+    dependsOn: string[]; // Array of step KEYs that this step depends on
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateWorkflowStepPayload {
+    name: string;
+    key: string;
+    description: string;
+    displayOrder: number;
+    requiredRole: string;
+    formId: number | null;
+    icon: string | null;
+    color: string | null;
+    dependencyType: 'ALL' | 'ANY' | 'NONE';
+    dependsOn: string[];
+}
+
+export interface UpdateWorkflowStepPayload {
+    name?: string;
+    key?: string;
+    description?: string;
+    displayOrder?: number;
+    isActive?: boolean;
+    requiredRole?: string;
+    formId?: number | null;
+    icon?: string | null;
+    color?: string | null;
+    dependencyType?: 'ALL' | 'ANY' | 'NONE';
+    dependsOn?: string[];
+}
+
+export interface BulkUpdateWorkflowStepsPayload {
+    steps: Partial<WorkflowStep>[];
+}
+
+// Response Wrappers
+export interface WorkflowStepsResponse {
+    success: boolean;
+    message: string;
+    data: WorkflowStep[];
+}
+
+export interface SingleWorkflowStepResponse {
+    success: boolean;
+    message: string;
+    data: WorkflowStep;
+}
+
+// Badge Templates
+export interface BadgeTemplate {
+    id: number;
+    name: string;
+    description: string;
+    htmlContent: string;
+    cssStyles: string;
+    badgeType: string;
+    logoUrl: string | null;
+    width: number;
+    height: number;
+    dynamicVariables: string; // JSON string array
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Invitation Templates
+export interface InvitationTemplate {
+    id: number;
+    name: string;
+    description: string | null;
+    htmlContent: string;
+    cssStyles: string;
+    dynamicVariables: string; // JSON string array
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateInvitationTemplatePayload {
+    name: string;
+    description?: string;
+    htmlContent: string;
+    cssStyles: string;
+    dynamicVariables: string[];
+    isDefault?: boolean;
+}
+
+export interface CreateBadgeTemplatePayload {
+    name: string;
+    description?: string;
+    htmlContent: string;
+    cssStyles: string;
+    badgeType: string;
+    logoUrl?: string | null;
+    width: number;
+    height: number;
+    dynamicVariables: string[];
+    isDefault?: boolean;
+}
+
+export interface SingleBadgeTemplateResponse {
+    success: boolean;
+    message: string;
+    data: BadgeTemplate;
+}
+
+export interface BadgeTemplatesResponse {
+    success: boolean;
+    message: string;
+    data: BadgeTemplate[];
+}
+
+// Form Type for selection in workflow step
+export interface Form {
+    form_id: number;
+    name: string;
+    type: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
 }
 
 // Responses
@@ -259,6 +401,99 @@ export interface OrganizationsResponse {
     };
 }
 
+export interface DashboardMetric {
+    value: number;
+    label: string;
+    trend?: 'up' | 'down' | 'stable';
+    progress?: number;
+    percentage?: number;
+}
+
+export interface DashboardKeyMetrics {
+    totalRegistered: DashboardMetric;
+    fullyAccredited: DashboardMetric;
+    pendingApproval: DashboardMetric;
+    totalRejected: DashboardMetric;
+}
+
+export interface DashboardStatus {
+    value: number;
+    percentage: number;
+    color: string;
+}
+
+export interface DashboardJournalistStatus {
+    approved: DashboardStatus;
+    rejected: DashboardStatus;
+    pending: DashboardStatus;
+}
+
+export interface DashboardOrgType {
+    name: string;
+    count: number;
+    color: string;
+}
+
+export interface DashboardCountry {
+    name: string;
+    count: number;
+    color: string;
+    code: string;
+}
+
+export interface DashboardAuthorityDecision {
+    authority: string;
+    icon: string;
+    approved?: number;
+    rejected?: number;
+    visaGranted?: number;
+    visaDenied?: number;
+    allowedEntry?: number;
+    deniedEntry?: number;
+    color: string;
+}
+
+export interface DashboardJournalistEntry {
+    date: string;
+    day: string;
+    total: number;
+    foreign: number;
+}
+
+export interface DashboardFilterOptions {
+    organizations: string[];
+    countries: string[];
+    statuses: string[];
+}
+
+export interface DashboardData {
+    form: { id: string; name: string } | null;
+    keyMetrics: DashboardKeyMetrics;
+    journalistStatus: DashboardJournalistStatus;
+    mediaOrganizationType: DashboardOrgType[];
+    countries: DashboardCountry[];
+    decisionsAndApprovals: DashboardAuthorityDecision[];
+    journalistsEntered: DashboardJournalistEntry[];
+    filterOptions: DashboardFilterOptions;
+}
+
+export interface DashboardForm {
+    id: string;
+    name: string;
+}
+
+export interface DashboardDataResponse {
+    success: boolean;
+    message: string;
+    data: DashboardData;
+}
+
+export interface DashboardFormsResponse {
+    success: boolean;
+    message: string;
+    data: DashboardForm[];
+}
+
 export interface UsersResponse {
     success: boolean;
     message: string;
@@ -270,9 +505,121 @@ export interface UsersResponse {
     };
 }
 
+<<<<<<< HEAD
 // export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
 export const FILE_BASE_URL = 'http://localhost:3000';
+=======
+// Super Admin Dashboard Types
+export interface SuperAdminMetric {
+    value: number;
+    percentage: number;
+    trend: 'up' | 'down';
+    label: string;
+}
+>>>>>>> 63ab575adcc24b9d998ddc40c4478274356a3c7d
 
+export interface SuperAdminOverview {
+    totalApplications: SuperAdminMetric;
+    approvedApplications: SuperAdminMetric;
+    pendingApplications: SuperAdminMetric;
+}
+
+export interface SuperAdminCharts {
+    timeSeries: { date: string; count: number }[];
+    statusDistribution: { status: string; count: number }[];
+    roleDistribution: { roleName: string; count: number }[];
+}
+
+export interface SuperAdminStakeholder {
+    name: string;
+    value: number;
+}
+
+export interface SuperAdminStakeholderStatus {
+    [stakeholderName: string]: {
+        APPROVED: number;
+        REJECTED: number;
+        PENDING: number;
+    };
+}
+
+export interface SuperAdminPerformance {
+    stakeholder: string;
+    averageProcessingTimeMinutes: number;
+    trend: { date: string; value: number }[];
+}
+
+export interface SuperAdminOverviewResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminOverview;
+}
+
+export interface SuperAdminChartsResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminCharts;
+}
+
+export interface SuperAdminStakeholdersResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminStakeholder[];
+}
+
+export interface SuperAdminStakeholderStatusResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminStakeholderStatus;
+}
+
+export interface SuperAdminPerformanceResponse {
+    success: boolean;
+    message: string;
+    data: SuperAdminPerformance[];
+}
+
+// Admin Dashboard Types (Limited Admin)
+export interface AdminKPI {
+    value: number;
+    percentage: number;
+    trend: 'up' | 'down' | 'neutral';
+    label: string;
+}
+
+export interface AdminAnalyticsData {
+    kpis: {
+        totalApplicationsReceived: AdminKPI;
+        approvedByYou: AdminKPI;
+        pendingDecision: AdminKPI;
+    };
+    chartData: {
+        timeSeries: { date: string; count: number }[];
+        statusDistribution: { status: string; count: number }[];
+        orgDistribution: { name: string; value: number }[];
+    };
+    performance: {
+        averageProcessingTimeMinutes: number;
+        label: string;
+    };
+    recentActivity: {
+        id: number;
+        applicationId: number;
+        applicant: string;
+        status: string;
+        actionAt: string;
+        notes: string | null;
+    }[];
+}
+
+export interface AdminAnalyticsResponse {
+    success: boolean;
+    message: string;
+    data: AdminAnalyticsData;
+}
+
+// export const FILE_BASE_URL = 'http://localhost:5000';
+export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
 export const getFileUrl = (path?: string | null): string => {
     if (!path) {
         console.log('[getFileUrl] empty path:', path);
@@ -325,7 +672,7 @@ export const api = createApi({
             return headers;
         },
     }),
-    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage'],
+    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow', 'Badge', 'Invitation'],
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, any>({
             query: (credentials) => ({
@@ -369,11 +716,18 @@ export const api = createApi({
             },
             providesTags: ['Category'],
         }),
-        createPermission: builder.mutation<Permission, Partial<Permission> & { categoryId: string | null }>({
+        createPermission: builder.mutation<Permission, Partial<Permission>>({
             query: (body) => ({
-                url: '/permissions/permissions',
+                url: '/permissions/resources',
                 method: 'POST',
                 body,
+            }),
+            invalidatesTags: ['Permission'],
+        }),
+        deletePermission: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/permissions/permissions/${id}`,
+                method: 'DELETE',
             }),
             invalidatesTags: ['Permission'],
         }),
@@ -388,7 +742,7 @@ export const api = createApi({
         updateCategory: builder.mutation<Category, { id: number; data: Partial<Category> }>({
             query: ({ id, data }) => ({
                 url: `/permissions/categories/${id}`,
-                method: 'PATCH',
+                method: 'PUT',
                 body: data,
             }),
             invalidatesTags: ['Category'],
@@ -464,11 +818,29 @@ export const api = createApi({
             }),
             invalidatesTags: ['Application'],
         }),
+        approveWorkflowStep: builder.mutation<void, { applicationId: number, stepKey: string, status: 'APPROVED' | 'REJECTED', notes?: string }>({
+            query: ({ applicationId, stepKey, ...body }) => ({
+                url: `/applications/${applicationId}/approve/${stepKey}`,
+                method: 'PUT',
+                body,
+            }),
+            invalidatesTags: ['Application'],
+        }),
         getApprovedApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number } | void>({
             query: (params) => {
                 const page = params && 'page' in params ? params.page : 1;
                 const limit = params && 'limit' in params ? params.limit : 10;
                 return `/applications/approved?page=${page}&limit=${limit}`;
+            },
+            transformResponse: (response: ApplicationsResponse) => response.data,
+            providesTags: ['Application'],
+        }),
+        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string } | void>({
+            query: (params) => {
+                const page = params && 'page' in params ? params.page : 1;
+                const limit = params && 'limit' in params ? params.limit : 10;
+                const search = params && 'search' in params ? params.search : '';
+                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}`;
             },
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
@@ -588,6 +960,148 @@ export const api = createApi({
             }),
             invalidatesTags: ['LandingPage'],
         }),
+
+        // Workflow Steps
+        getWorkflowSteps: builder.query<WorkflowStep[], void>({
+            query: () => '/workflow-steps',
+            transformResponse: (response: WorkflowStepsResponse) => response.data,
+            providesTags: ['Workflow'],
+        }),
+        createWorkflowStep: builder.mutation<WorkflowStep, CreateWorkflowStepPayload>({
+            query: (body) => ({
+                url: '/workflow-steps',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Workflow'],
+        }),
+        updateWorkflowStep: builder.mutation<WorkflowStep, { id: number; data: UpdateWorkflowStepPayload }>({
+            query: ({ id, data }) => ({
+                url: `/workflow-steps/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Workflow'],
+        }),
+        deleteWorkflowStep: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/workflow-steps/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Workflow'],
+        }),
+        bulkUpdateWorkflowSteps: builder.mutation<void, BulkUpdateWorkflowStepsPayload>({
+            query: (body) => ({
+                url: '/workflow-steps/bulk',
+                method: 'PUT',
+                body,
+            }),
+            invalidatesTags: ['Workflow'],
+        }),
+        // Forms (for selection in workflow)
+        getForms: builder.query<Form[], void>({
+            query: () => '/forms',
+            transformResponse: (response: { forms: Form[] }) => response.forms,
+        }),
+        // Badge Templates
+        getBadgeTemplates: builder.query<BadgeTemplate[], void>({
+            query: () => '/badges/templates',
+            transformResponse: (response: BadgeTemplatesResponse) => response.data,
+            providesTags: ['Badge'],
+        }),
+        createBadgeTemplate: builder.mutation<BadgeTemplate, CreateBadgeTemplatePayload>({
+            query: (body) => ({
+                url: '/badges/templates',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+        updateBadgeTemplate: builder.mutation<BadgeTemplate, { id: number; data: Partial<CreateBadgeTemplatePayload> }>({
+            query: ({ id, data }) => ({
+                url: `/badges/templates/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+        deleteBadgeTemplate: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/badges/templates/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Badge'],
+        }),
+
+        // Dashboard Endpoints
+        getDashboardForms: builder.query<DashboardForm[], void>({
+            query: () => '/dashboard/forms',
+            transformResponse: (response: DashboardFormsResponse) => response.data,
+        }),
+        getDashboardData: builder.query<DashboardData, { formName?: string }>({
+            query: ({ formName }) => {
+                const params = new URLSearchParams();
+                if (formName && formName !== 'all') {
+                    params.append('formName', formName);
+                }
+                return `/dashboard/data?${params.toString()}`;
+            },
+            transformResponse: (response: DashboardDataResponse) => response.data,
+        }),
+        // Invitation Endpoints
+        getInvitationTemplates: builder.query<InvitationTemplate[], void>({
+            query: () => '/invitations/templates',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Invitation'],
+        }),
+        createInvitationTemplate: builder.mutation<InvitationTemplate, CreateInvitationTemplatePayload>({
+            query: (payload) => ({
+                url: '/invitations/templates',
+                method: 'POST',
+                body: payload,
+            }),
+            invalidatesTags: ['Invitation'],
+        }),
+        updateInvitationTemplate: builder.mutation<InvitationTemplate, { id: number; data: Partial<CreateInvitationTemplatePayload> }>({
+            query: ({ id, data }) => ({
+                url: `/invitations/templates/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Invitation'],
+        }),
+        deleteInvitationTemplate: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/invitations/templates/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Invitation'],
+        }),
+        // Super Admin Dashboard Endpoints
+        getSuperAdminOverview: builder.query<SuperAdminOverview, void>({
+            query: () => '/super-admin/overview',
+            transformResponse: (response: SuperAdminOverviewResponse) => response.data,
+        }),
+        getSuperAdminCharts: builder.query<SuperAdminCharts, void>({
+            query: () => '/super-admin/charts',
+            transformResponse: (response: SuperAdminChartsResponse) => response.data,
+        }),
+        getSuperAdminStakeholders: builder.query<SuperAdminStakeholder[], void>({
+            query: () => '/super-admin/stakeholders',
+            transformResponse: (response: SuperAdminStakeholdersResponse) => response.data,
+        }),
+        getSuperAdminStakeholderStatus: builder.query<SuperAdminStakeholderStatus, void>({
+            query: () => '/super-admin/stakeholder-status',
+            transformResponse: (response: SuperAdminStakeholderStatusResponse) => response.data,
+        }),
+        getSuperAdminPerformance: builder.query<SuperAdminPerformance[], void>({
+            query: () => '/super-admin/performance',
+            transformResponse: (response: SuperAdminPerformanceResponse) => response.data,
+        }),
+        getAdminAnalytics: builder.query<AdminAnalyticsData, void>({
+            query: () => '/admins/analytics',
+            transformResponse: (response: AdminAnalyticsResponse) => response.data,
+        }),
     }),
 });
 
@@ -604,10 +1118,13 @@ export const {
     useDeleteCategoryMutation,
     useTogglePermissionMutation,
     useBulkUpdatePermissionsMutation,
+    useDeletePermissionMutation,
     useGetApplicationsQuery,
     useGetApplicationByIdQuery,
     useUpdateApplicationStatusMutation,
+    useApproveWorkflowStepMutation,
     useGetApprovedApplicationsQuery,
+    useGetWorkflowApplicationsQuery,
     useGetOrganizationsQuery,
     useCreateOrganizationMutation,
     useUpdateOrganizationMutation,
@@ -623,5 +1140,35 @@ export const {
     useDeleteEmailTemplateMutation,
     useGetLandingPageSettingsQuery,
     useCreateLandingPageSettingsMutation,
-    useDeleteLandingPageSettingsMutation
+    useDeleteLandingPageSettingsMutation,
+
+    // New Workflow hooks
+    useGetWorkflowStepsQuery,
+    useCreateWorkflowStepMutation,
+    useUpdateWorkflowStepMutation,
+    useDeleteWorkflowStepMutation,
+    useBulkUpdateWorkflowStepsMutation,
+    // Forms
+    useGetFormsQuery,
+    // Badge Templates
+    useGetBadgeTemplatesQuery,
+    useCreateBadgeTemplateMutation,
+    useUpdateBadgeTemplateMutation,
+    useDeleteBadgeTemplateMutation,
+    // Invitation Hooks
+    useGetInvitationTemplatesQuery,
+    useCreateInvitationTemplateMutation,
+    useUpdateInvitationTemplateMutation,
+    useDeleteInvitationTemplateMutation,
+    // Dashboard Hooks
+    useGetDashboardFormsQuery,
+    useGetDashboardDataQuery,
+
+    // Super Admin Dashboard Hooks
+    useGetSuperAdminOverviewQuery,
+    useGetSuperAdminChartsQuery,
+    useGetSuperAdminStakeholdersQuery,
+    useGetSuperAdminStakeholderStatusQuery,
+    useGetSuperAdminPerformanceQuery,
+    useGetAdminAnalyticsQuery,
 } = api;

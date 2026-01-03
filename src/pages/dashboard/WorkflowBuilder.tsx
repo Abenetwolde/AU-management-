@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useMemo } from 'react';
+import { useCallback, useState, useRef, useEffect, DragEvent, useMemo } from 'react';
 import {
     ReactFlow,
     Controls,
@@ -14,380 +14,916 @@ import {
     Position,
     NodeProps,
     Node,
-    MarkerType
+    MarkerType,
+    OnEdgesDelete,
+    ReactFlowProvider,
+    useReactFlow,
+    EdgeProps,
+    BaseEdge,
+    getBezierPath
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import {
     Save,
-    Play,
-    RotateCcw,
-    AlertCircle,
-    Search,
-    Building2,
-    ShieldCheck,
-    Globe,
-    Newspaper,
-    Briefcase
+    RefreshCw,
+    Plus,
+    Workflow as WorkflowIcon,
+    Settings,
+    Trash2,
+    Loader2,
+    PanelLeftClose,
+    PanelLeftOpen,
+    Edit,
+    GripVertical,
+    X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+    useGetWorkflowStepsQuery,
+    useCreateWorkflowStepMutation,
+    useUpdateWorkflowStepMutation,
+    useDeleteWorkflowStepMutation,
+    useBulkUpdateWorkflowStepsMutation,
+    useGetRolesQuery,
+    useGetFormsQuery,
+    WorkflowStep,
+    BulkUpdateWorkflowStepsPayload
+} from '@/store/services/api';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 
-// --- Types ---
+// --- Custom Components ---
 
-type OrganizationType = 'Media' | 'Embassy' | 'NGO' | 'IO' | 'Gov' | 'Security';
+const StepNode = ({ data, selected }: NodeProps) => {
+    const getDependencyTypeColor = (type: string) => {
+        switch (type) {
+            case 'ALL': return 'border-l-blue-600 bg-blue-50/50';
+            case 'ANY': return 'border-l-orange-500 bg-orange-50/50';
+            case 'NONE': return 'border-l-slate-500 bg-white';
+            default: return 'border-l-slate-500 bg-white';
+        }
+    };
 
-interface Organization {
-    id: string;
-    code: string;
-    name: string;
-    type: OrganizationType;
-}
-
-// --- Mock Data ---
-
-const MOCK_ORGS: Organization[] = [
-    { id: 'ema', code: 'EMA', name: 'Ethiopian Media Authority', type: 'Gov' },
-    { id: 'ics', code: 'ICS', name: 'Immigration & Citizenship Service', type: 'Security' },
-    { id: 'niss', code: 'NISS', name: 'National Intelligence Security Service', type: 'Security' },
-    { id: 'insa', code: 'INSA', name: 'Information Network Security Administrator', type: 'Security' },
-    { id: 'au', code: 'AU', name: 'African Union', type: 'IO' },
-    { id: 'customs', code: 'CUSTOMS', name: 'Custom Commission', type: 'Gov' },
-    { id: 'mofa', code: 'MOFA', name: 'Ministry of Foreign Affairs', type: 'Gov' },
-];
-
-const getOrgStyle = (type: OrganizationType) => {
-    switch (type) {
-        case 'Media': return { border: 'border-l-4 border-l-blue-500', icon: Newspaper, bg: 'bg-blue-50' };
-        case 'Security': return { border: 'border-l-4 border-l-red-500', icon: ShieldCheck, bg: 'bg-red-50' };
-        case 'IO': return { border: 'border-l-4 border-l-purple-500', icon: Globe, bg: 'bg-purple-50' };
-        case 'Gov': return { border: 'border-l-4 border-l-green-500', icon: Building2, bg: 'bg-green-50' };
-        default: return { border: 'border-l-4 border-l-gray-500', icon: Briefcase, bg: 'bg-gray-50' };
-    }
-};
-
-// --- Custom Nodes ---
-
-const OrganizationNode = ({ data, selected }: NodeProps) => {
-    const style = getOrgStyle(data.orgType as OrganizationType);
-    const Icon = style.icon;
+    const color = getDependencyTypeColor(data.dependencyType as string);
+    const customStyle = data.color ? { borderLeftColor: data.color as string } : {};
 
     return (
-        <div className={`
-            px-4 py-3 rounded-md bg-white border shadow-sm w-[240px] transition-all
-            ${style.border}
-            ${selected ? 'ring-2 ring-primary border-transparent' : 'border-gray-200'}
-        `}>
-            <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-muted-foreground" />
+        <div
+            className={`
+                px-4 py-3 rounded-lg bg-white border shadow-sm w-[280px] transition-all
+                border-l-[6px] relative group
+                ${selected ? 'ring-2 ring-blue-500/50 ring-offset-2 border-transparent' : 'border-slate-200'}
+            `}
+            style={customStyle}
+        >
+            <Handle type="target" position={Position.Top} className="!w-4 !h-2 !rounded-sm !bg-slate-400 !-top-1.5 transition-colors hover:!bg-blue-500" />
 
-            <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-md ${style.bg} shrink-0`}>
-                    <Icon className="h-5 w-5 text-gray-700" />
+            <div className="flex items-start gap-4">
+                <div className="p-2.5 rounded-lg shrink-0 bg-slate-100/80 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                    <WorkflowIcon className="h-5 w-5 text-slate-600 group-hover:text-blue-600" />
                 </div>
-                <div>
-                    <div className="font-bold text-sm leading-tight text-gray-900">{data.label as string}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{data.orgType as string}</div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                        <div className="font-bold text-sm text-slate-900 truncate pr-2">{data.label as string}</div>
+                        {data.onEdit && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); (data.onEdit as () => void)(); }}
+                                className="text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110"
+                            >
+                                <Settings className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1 font-mono tracking-tight bg-slate-50 inline-block px-1 rounded border border-slate-100">
+                        {data.key as string}
+                    </div>
                 </div>
             </div>
-            {data.description && (
-                <div className="mt-2 text-[10px] text-gray-500 bg-gray-50 p-1.5 rounded border border-gray-100 italic truncate">
-                    {data.description as string}
-                </div>
-            )}
 
-            <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-muted-foreground" />
+            <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 border-slate-50">
+                <div className="flex gap-1.5">
+                    <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal text-slate-600 bg-slate-50">
+                        {data.requiredRole as string}
+                    </Badge>
+                    {data.dependencyType !== 'NONE' && (
+                        <Badge variant="secondary" className="text-[9px] h-5 px-1.5 font-medium">
+                            {data.dependencyType as string}
+                        </Badge>
+                    )}
+                </div>
+                {data.formId && <Badge className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">Form</Badge>}
+            </div>
+
+            <Handle type="source" position={Position.Bottom} className="!w-4 !h-2 !rounded-sm !bg-slate-400 !-bottom-1.5 transition-colors hover:!bg-blue-500" />
         </div>
     );
 };
 
-const StartNode = ({ data }: NodeProps) => (
-    <div className="px-6 py-2 rounded-full bg-green-50 border-2 border-green-500 text-green-700 font-bold shadow-sm text-sm text-center min-w-[120px]">
-        {data.label as string}
-        <Handle type="source" position={Position.Bottom} className="!bg-green-600" />
-    </div>
-);
-
-const EndNode = ({ data }: NodeProps) => (
-    <div className="px-6 py-2 rounded-full bg-slate-800 border-2 border-slate-900 text-white font-bold shadow-sm text-sm text-center min-w-[120px]">
-        <Handle type="target" position={Position.Top} className="!bg-slate-900" />
-        {data.label as string}
-    </div>
-);
+const CustomEdge = (props: EdgeProps) => {
+    const [edgePath] = getBezierPath(props);
+    return (
+        <BaseEdge
+            path={edgePath}
+            {...props}
+            style={{
+                strokeWidth: 2,
+                stroke: '#94a3b8',
+                ...props.style
+            }}
+        />
+    );
+}
 
 const nodeTypes = {
-    organization: OrganizationNode,
-    start: StartNode,
-    end: EndNode
+    step: StepNode,
+    // Add simple placeholder Start/End if needed, but visually integrating them is better
+};
+const edgeTypes = {
+    custom: CustomEdge
+}
+
+// --- Logic Helpers ---
+
+const transformApiToNodes = (steps: WorkflowStep[], onEdit: (step: WorkflowStep) => void): { nodes: Node[], edges: Edge[] } => {
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+
+    // 1. Separate Placed vs Unplaced
+    // Convention: displayOrder > 0 means placed. 0 means sidebar.
+    const placedSteps = steps.filter(s => s.displayOrder > 0).sort((a, b) => a.displayOrder - b.displayOrder);
+
+    // 2. Simple Auto-Layout for Placed Steps (if needed) or use saved positions?
+    // We don't save distinct X/Y, only order. So we must auto-layout.
+    // Group by order to support parallel visualization (side-by-side).
+    // If order 10 has 2 steps, put them side by side.
+
+    // Group by displayOrder values (assuming standard increments like 10, 20)
+    // Map placed steps to levels
+    const levels = new Map<number, WorkflowStep[]>();
+    placedSteps.forEach(s => {
+        if (!levels.has(s.displayOrder)) levels.set(s.displayOrder, []);
+        levels.get(s.displayOrder)!.push(s);
+    });
+
+    const sortedLevels = Array.from(levels.keys()).sort((a, b) => a - b);
+    let currentY = 50;
+
+    sortedLevels.forEach(order => {
+        const rowSteps = levels.get(order)!;
+        const ROW_WIDTH = rowSteps.length * 320; // 280 node + 40 gap
+        const startX = 600 - (ROW_WIDTH / 2); // Center around x=600
+
+        rowSteps.forEach((step, idx) => {
+            nodes.push({
+                id: step.key,
+                type: 'step',
+                position: { x: startX + (idx * 320), y: currentY },
+                data: {
+                    label: step.name,
+                    key: step.key,
+                    dependencyType: step.dependencyType,
+                    dependsOn: step.dependsOn,
+                    requiredRole: step.requiredRole,
+                    isActive: step.isActive,
+                    displayOrder: step.displayOrder,
+                    description: step.description,
+                    color: step.color,
+                    formId: step.formId,
+                    originalStep: step,
+                    onEdit: () => onEdit(step)
+                }
+            });
+        });
+
+        currentY += 180; // Vertical gap
+    });
+
+    // 3. Edges
+    // Restore edges from `dependsOn`
+    const createdEdges = new Set<string>();
+    placedSteps.forEach(step => {
+        if (step.dependsOn && step.dependsOn.length > 0) {
+            step.dependsOn.forEach(depKey => {
+                // Ensure source exists on canvas
+                if (nodes.find(n => n.id === depKey)) {
+                    const edgeId = `e-${depKey}-${step.key}`;
+                    edges.push({
+                        id: edgeId,
+                        source: depKey,
+                        target: step.key,
+                        type: 'custom',
+                        animated: true,
+                        markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' },
+                    });
+                    createdEdges.add(edgeId);
+                }
+            });
+        }
+    });
+
+    return { nodes, edges };
 };
 
-// --- Initial State ---
+const transformNodesToApi = (nodes: Node[], edges: Edge[], allStepsOriginal: WorkflowStep[]): BulkUpdateWorkflowStepsPayload => {
+    // 1. Identify "Start" nodes (no incoming edges) and "End" nodes (no outgoing)
+    // Actually, we process based on Edge logic and Sort order.
 
-const initialNodes: Node[] = [
-    { id: 'start', type: 'start', position: { x: 250, y: 0 }, data: { label: 'Start' } },
-    {
-        id: 'node-1',
-        type: 'organization',
-        position: { x: 200, y: 100 },
-        data: { label: 'Ethiopian Media Authority', orgCode: 'EMA', orgType: 'Gov', description: 'Initial eligibility check' }
-    },
-    { id: 'end', type: 'end', position: { x: 250, y: 500 }, data: { label: 'Publish Badge' } },
-];
+    // Sort nodes by Y position to determine "Logic Order" for calculating dependency types
+    // Note: X position determines precedence in parallel processing if needed, but Y is flow direction.
+    const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
 
-const initialEdges: Edge[] = [
-    { id: 'e-start-1', source: 'start', target: 'node-1', animated: true, type: 'smoothstep' },
-];
+    const steps = sortedNodes.map((node, index) => {
+        // Find incoming edges for this node
+        const incomingEdges = edges.filter(e => e.target === node.id);
+        const dependsOn = incomingEdges.map(e => e.source);
 
-// --- Main Component ---
+        // Logic Rule:
+        // First Node (Index 0 or No incoming): NONE
+        // Last Node (Index Last): ALL (Force ALL if it's the absolute last?)
+        // Middle: ANY
+
+        let dependencyType: 'ALL' | 'ANY' | 'NONE' = 'ANY';
+
+        if (index === 0 || dependsOn.length === 0) {
+            dependencyType = 'NONE';
+        } else if (index === sortedNodes.length - 1) {
+            // User Rule: "Use ALL for last step"
+            dependencyType = 'ALL';
+        } else {
+            // User Rule: "Use ANY for anything beside last and first"
+            dependencyType = 'ANY';
+        }
+
+        // Keep existing ID for update
+        const original = (node.data.originalStep as WorkflowStep) || allStepsOriginal.find(s => s.key === node.id);
+
+        return {
+            id: original?.id || 0, // 0 technically shouldn't happen for existing nodes
+            // Y position determines visual layer (order). We use increments of 10.
+            // Nodes on similar Y (+/- 20px) share same order.
+            displayOrder: Math.floor(node.position.y / 100) * 10 || 10,
+            dependsOn: dependsOn,
+            dependencyType: dependencyType
+        };
+    });
+
+    // Also include steps that are NOT on the canvas?
+    // Logic: Bulk Update usually replaces. If we omit steps, do they get deleted or set to inactive?
+    // The endpoint likely updates provided IDs. If we don't send Sidebar steps, they might lose their order or remain as is.
+    // To be safe, we should probably send Sidebar steps with displayOrder: 0 to persist their "unplaced" state.
+    // But transformNodesToApi usually only deals with Graph state.
+
+    return { steps };
+};
+
+// --- Component ---
 
 export function WorkflowBuilder() {
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-    const [searchQuery, setSearchQuery] = useState('');
-    const reactFlowWrapper = useRef<HTMLDivElement>(null);
-    const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-
-    // Filter sidebar organizations
-    const filteredOrgs = MOCK_ORGS.filter(org =>
-        org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        org.code.toLowerCase().includes(searchQuery.toLowerCase())
+    return (
+        <ReactFlowProvider>
+            <WorkflowBuilderContent />
+        </ReactFlowProvider>
     );
+}
+
+function WorkflowBuilderContent() {
+    const { data: workflowSteps, isLoading: isStepsLoading, refetch } = useGetWorkflowStepsQuery();
+    const [createStep, { isLoading: isCreating }] = useCreateWorkflowStepMutation();
+    const [updateStep, { isLoading: isUpdating }] = useUpdateWorkflowStepMutation();
+    const [deleteStep, { isLoading: isDeleting }] = useDeleteWorkflowStepMutation();
+    const [bulkUpdate, { isLoading: isSaving }] = useBulkUpdateWorkflowStepsMutation();
+
+    const { data: roles } = useGetRolesQuery();
+    const { data: forms } = useGetFormsQuery();
+
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const { screenToFlowPosition } = useReactFlow();
+
+    // Ref to track latest nodes for callbacks
+    const nodesRef = useRef<Node[]>(nodes);
+    useEffect(() => {
+        nodesRef.current = nodes;
+    }, [nodes]);
+
+    // Sidebar State
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Modals
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [currentStep, setCurrentStep] = useState<Partial<WorkflowStep>>({});
+
+    const handleEditClick = useCallback((step: WorkflowStep) => {
+        // If the step is on the canvas, use the latest node data (which might have unsaved changes)
+        // Otherwise use the API step data.
+        const node = nodesRef.current.find(n => n.id === step.key);
+        if (node) {
+            setCurrentStep({
+                ...step,
+                displayOrder: node.data.displayOrder as number,
+                dependencyType: node.data.dependencyType as any,
+                dependsOn: node.data.dependsOn as string[]
+            });
+        } else {
+            setCurrentStep(step);
+        }
+        setIsEditOpen(true);
+    }, []);
+
+    // Load Data
+    useEffect(() => {
+        if (workflowSteps) {
+            const { nodes: apiNodes, edges: apiEdges } = transformApiToNodes(workflowSteps, handleEditClick);
+            setNodes(apiNodes);
+            setEdges(apiEdges);
+        }
+    }, [workflowSteps, setNodes, setEdges, handleEditClick]);
 
     const onConnect = useCallback(
         (params: Connection) => setEdges((eds) => addEdge({
             ...params,
+            type: 'custom',
             animated: true,
-            type: 'smoothstep',
-            markerEnd: { type: MarkerType.ArrowClosed }
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
         }, eds)),
         [setEdges],
     );
 
-    const onDragStart = (event: React.DragEvent, org: Organization) => {
-        event.dataTransfer.setData('application/reactflow', JSON.stringify(org));
+    const onDragStart = (event: DragEvent, step: WorkflowStep) => {
+        event.dataTransfer.setData('application/reactflow', JSON.stringify(step));
         event.dataTransfer.effectAllowed = 'move';
     };
 
-    const onDragOver = useCallback((event: React.DragEvent) => {
+    const onDragOver = useCallback((event: DragEvent) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
     }, []);
 
     const onDrop = useCallback(
-        (event: React.DragEvent) => {
+        (event: DragEvent) => {
             event.preventDefault();
+            const data = event.dataTransfer.getData('application/reactflow');
+            if (!data) return;
 
-            if (!reactFlowWrapper.current || !reactFlowInstance) return;
+            const step: WorkflowStep = JSON.parse(data);
+            const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
-            const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-            const type = event.dataTransfer.getData('application/reactflow');
-
-            if (!type) return;
-
-            const org: Organization = JSON.parse(type);
-
-            const position = reactFlowInstance.screenToFlowPosition({
-                x: event.clientX,
-                y: event.clientY,
-            });
-
+            // Removing from sidebar logic is handled by "displayOrder changes" -> refresh/refetch
+            // But immediate UI update:
             const newNode: Node = {
-                id: `node-${Date.now()}`,
-                type: 'organization',
+                id: step.key,
+                type: 'step',
                 position,
                 data: {
-                    label: org.name,
-                    orgCode: org.code,
-                    orgType: org.type,
-                    description: 'Verify applicant details'
+                    label: step.name,
+                    key: step.key,
+                    dependencyType: step.dependencyType,
+                    dependsOn: step.dependsOn,
+                    requiredRole: step.requiredRole,
+                    isActive: step.isActive,
+                    displayOrder: 100, // Temp value, will be calculated on save
+                    description: step.description,
+                    color: step.color,
+                    formId: step.formId,
+                    originalStep: step,
+                    onEdit: () => handleEditClick(step)
                 },
             };
 
             setNodes((nds) => nds.concat(newNode));
+            toast.success(`Placed ${step.name}. Link it to other steps.`);
         },
-        [reactFlowInstance, setNodes],
+        [screenToFlowPosition, handleEditClick, setNodes]
     );
 
-    const handleSave = () => {
-        // Build adjacency list for topological analysis
-        const adjacency: Record<string, string[]> = {};
-        const inDegree: Record<string, number> = {};
+    const handleCreate = async () => {
+        try {
+            await createStep({
+                name: currentStep.name!,
+                key: currentStep.key!,
+                description: currentStep.description || '',
+                displayOrder: 0, // Unplaced -> Sidebar
+                requiredRole: currentStep.requiredRole!,
+                formId: currentStep.formId || null,
+                icon: '',
+                color: currentStep.color || '#3b82f6',
+                dependencyType: 'NONE', // Default
+                dependsOn: []
+            }).unwrap();
 
-        nodes.forEach(node => {
-            adjacency[node.id] = [];
-            inDegree[node.id] = 0;
-        });
+            toast.success("Step created in Sidebar");
+            setIsCreateOpen(false);
+            setCurrentStep({});
+            refetch();
+        } catch (err: any) {
+            toast.error("Error creating step");
+        }
+    };
 
-        edges.forEach(edge => {
-            if (adjacency[edge.source]) {
-                adjacency[edge.source].push(edge.target);
-            }
-            if (inDegree[edge.target] !== undefined) {
-                inDegree[edge.target]++;
-            }
-        });
-
-        // Identify Parallel Groups
-        // Simple heuristic: If multiple nodes share the same parent(s), they might be parallel.
-        // Or if they are on the same 'rank'.
-        // For the requested JSON format, let's look at dependencies.
-
-        const generatedSteps = nodes
-            .filter(n => n.type === 'organization') // Only organization steps count for the payload
-            .map(node => {
-                const dependencies = edges
-                    .filter(e => e.target === node.id)
-                    .map(e => {
-                        const sourceNode = nodes.find(n => n.id === e.source);
-                        // If source is start node, dependsOn is empty
-                        if (sourceNode?.type === 'start') return null;
-                        return sourceNode?.id; // Use raw ID or a mapped Step ID? 
-                        // The user example uses "step-1", "step-2". 
-                        // We will use the node.id as stepId for consistency
-                    })
-                    .filter(Boolean) as string[];
-
-                // Determine parallel group
-                // If this node shares the same exact dependencies as another node, they are parallel
-                let parallelGroupId: string | null = null;
-                const siblings = nodes.filter(other =>
-                    other.id !== node.id &&
-                    other.type === 'organization' &&
-                    isDependencyEqual(other.id, node.id, edges)
-                );
-
-                if (siblings.length > 0) {
-                    const groupIds = [node.id, ...siblings.map(s => s.id)].sort();
-                    parallelGroupId = `group-${groupIds.join('-')}`;
-                    // Hash or simplify this ID in real app
-                    parallelGroupId = `parallel-${groupIds[0]}`;
+    const handleUpdate = async () => {
+        if (!currentStep.id) return;
+        try {
+            // 1. Update Node Data
+            setNodes((nds) => nds.map((n) => {
+                if (n.id === currentStep.key) {
+                    return { ...n, data: { ...n.data, ...currentStep, label: currentStep.name } };
                 }
+                return n;
+            }));
 
-                // Determine Order (Topo sort would be better, but Y position is a simple proxy for UI builders)
-                const order = Math.floor(node.position.y / 100) + 1;
+            // 2. Synchronize Edges if dependsOn changed
+            if (currentStep.dependsOn) {
+                setEdges(eds => {
+                    // Remove existing incoming edges for this node
+                    const otherEdges = eds.filter(e => e.target !== currentStep.key);
+                    // Add new edges for each dependency
+                    const newEdges = currentStep.dependsOn!.map(depKey => ({
+                        id: `e-${depKey}-${currentStep.key}`,
+                        source: depKey,
+                        target: currentStep.key!,
+                        type: 'custom',
+                        animated: true,
+                        markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
+                    }));
+                    return [...otherEdges, ...newEdges];
+                });
+            }
 
-                return {
-                    stepId: node.id,
-                    organizationCode: node.data.orgCode,
-                    order: order,
-                    dependsOn: dependencies,
-                    parallelGroupId: parallelGroupId,
-                    description: node.data.description
-                };
-            });
+            // 3. API Call
+            await updateStep({
+                id: currentStep.id,
+                data: {
+                    name: currentStep.name,
+                    description: currentStep.description,
+                    requiredRole: currentStep.requiredRole,
+                    formId: currentStep.formId,
+                    color: currentStep.color,
+                    dependencyType: currentStep.dependencyType as any,
+                }
+            }).unwrap();
 
-        // Log to console as requested
-        const payload = {
-            workflowId: "accreditation_v1",
-            steps: generatedSteps
-        };
-
-        console.log("Workflow Saved - API Payload:", JSON.stringify(payload, null, 2));
-        toast.success("Workflow saved! Check console for API payload.");
+            toast.success("Step updated and synced");
+            setIsEditOpen(false);
+            refetch();
+        } catch (err) { toast.error("Update failed"); }
     };
 
-    const isDependencyEqual = (nodeA: string, nodeB: string, allEdges: Edge[]) => {
-        const depsA = allEdges.filter(e => e.target === nodeA).map(e => e.source).sort().join(',');
-        const depsB = allEdges.filter(e => e.target === nodeB).map(e => e.source).sort().join(',');
-        return depsA === depsB && depsA.length > 0;
+    const handleDelete = async () => {
+        if (!currentStep.id) return;
+        if (!confirm("Delete this step?")) return;
+        try {
+            await deleteStep(currentStep.id).unwrap();
+            toast.success("Step deleted");
+            setIsEditOpen(false);
+            refetch();
+        } catch (err) { toast.error("Delete failed"); }
     };
+
+    const handleSaveFlow = async () => {
+        try {
+            if (!workflowSteps) return;
+            const payload = transformNodesToApi(nodes, edges, workflowSteps);
+
+            // We also need to preserve sidebar steps (order 0) so they aren't lost if the bulk update replaces ALL.
+            // Assuming bulk update expects only changed steps? Or all?
+            // If API requires ALL steps to be present to not delete them, we must include sidebar steps.
+            // If API patches, we are good. Let's assume we need to send ALL or at least the graphed ones.
+            // User requirement: "keep in mind the updated data is send to the api as well".
+
+            // To be safe, merge graphed steps with sidebar steps (preserved as displayOrder 0)
+            const graphStepIds = new Set(payload.steps.map(s => s.id));
+            const unplacedSteps = workflowSteps.filter(s => !graphStepIds.has(s.id)).map(s => ({
+                id: s.id,
+                displayOrder: 0,
+                dependsOn: [],
+                dependencyType: 'NONE' as const
+            }));
+
+            const fullPayload = { steps: [...payload.steps, ...unplacedSteps] };
+
+            await bulkUpdate(fullPayload).unwrap();
+            toast.success("Flow saved & Logic updated!");
+            refetch();
+        } catch (err) { toast.error("Save failed"); }
+    };
+
+    if (isStepsLoading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-slate-400" /></div>;
 
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)]">
-            <div className="flex justify-between items-center mb-4 px-1">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Workflow Builder</h1>
-                    <p className="text-sm text-muted-foreground">Drag organizations to define the accreditation process flow.</p>
+        <div className="flex flex-col">
+            <div className="flex justify-between items-center mb-4 px-1 border-b pb-3">
+                <div className="flex items-center gap-3">
+                    <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                        {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Workflow Builder</h1>
+                        <p className="text-sm text-muted-foreground">Drag steps from sidebar. Connect steps to define logic.</p>
+                    </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => { setNodes(initialNodes); setEdges(initialEdges); }}>
-                        <RotateCcw className="mr-2 h-4 w-4" /> Reset
+                    <Button variant="outline" size="sm" onClick={() => refetch()}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Reset
                     </Button>
-                    <Button size="sm" onClick={handleSave}>
-                        <Save className="mr-2 h-4 w-4" /> Save Workflow
+                    <Button size="sm" onClick={handleSaveFlow} disabled={isSaving} className="bg-slate-800 text-white">
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save Flow
                     </Button>
                 </div>
             </div>
 
-            <div className="flex flex-1 gap-4 overflow-hidden">
+            <div className="flex-1 flex overflow-hidden bg-slate-50 rounded-xl border shadow-sm relative">
                 {/* Sidebar */}
-                <aside className="w-[320px] bg-white border rounded-xl flex flex-col shadow-sm">
-                    <div className="p-4 border-b">
-                        <h2 className="font-semibold mb-2">Organizations</h2>
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search..."
-                                className="pl-9 bg-gray-50"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
+                <div className={cn("bg-white border-r flex flex-col transition-all duration-300 relative z-10", isSidebarOpen ? "w-80" : "w-0 overflow-hidden")}>
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50/50">
+                        <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">Unplaced Steps</span>
+                        <Button size="sm" onClick={() => { setCurrentStep({ color: '#3b82f6', isActive: true }); setIsCreateOpen(true); }} className="h-7 text-xs">
+                            <Plus className="mr-1 h-3 w-3" /> New
+                        </Button>
                     </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                        {filteredOrgs.map(org => {
-                            const style = getOrgStyle(org.type);
-                            const Icon = style.icon;
-
-                            return (
-                                <Card
-                                    key={org.id}
-                                    className={`p-3 cursor-move hover:shadow-md transition-all border group ${style.bg}`}
-                                    draggable
-                                    onDragStart={(e) => onDragStart(e, org)}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-white p-1.5 rounded-md shadow-sm border border-black/5">
-                                            <Icon className="h-4 w-4 text-gray-700" />
+                    <ScrollArea className="p-3 bg-slate-50/30 h-[400px] ">
+                        <div className="space-y-2 ">
+                            {workflowSteps?.map(step => {
+                                const isPlaced = nodes.some(n => n.id === step.key);
+                                return (
+                                    <div
+                                        key={step.id}
+                                        draggable={!isPlaced}
+                                        onDragStart={(e) => !isPlaced && onDragStart(e, step)}
+                                        className={cn(
+                                            "group flex flex-col gap-2 p-3 rounded-lg border border-slate-200 transition-all select-none",
+                                            isPlaced
+                                                ? "bg-slate-50 opacity-60 cursor-not-allowed grayscale"
+                                                : "bg-white hover:border-blue-400 hover:shadow-md cursor-grab active:cursor-grabbing"
+                                        )}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: step.color || '#3b82f6' }} />
+                                                <div>
+                                                    <div className="font-semibold text-sm text-slate-900">{step.name}</div>
+                                                    <div className="text-[10px] text-slate-500 font-mono">{step.key}</div>
+                                                </div>
+                                            </div>
+                                            {isPlaced ? (
+                                                <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Placed</span>
+                                            ) : (
+                                                <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-500" />
+                                            )}
                                         </div>
-                                        <div>
-                                            <div className="font-medium text-sm group-hover:text-primary transition-colors">{org.name}</div>
-                                            <div className="text-xs text-muted-foreground">{org.type}</div>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <Badge variant="outline" className="text-[9px] px-1 h-4 bg-slate-50">{step.requiredRole}</Badge>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleEditClick(step); }}>
+                                                <Edit className="h-3 w-3 text-slate-400 hover:text-blue-500" />
+                                            </Button>
                                         </div>
                                     </div>
-                                </Card>
-                            );
-                        })}
-                        {filteredOrgs.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground text-sm">
-                                No organizations found.
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="p-4 bg-gray-50 border-t text-xs text-muted-foreground">
-                        <AlertCircle className="h-4 w-4 inline mr-1 mb-0.5" />
-                        Drag companies onto the canvas. Connect nodes to define sequential or parallel paths.
-                    </div>
-                </aside>
+                                )
+                            })}
+                        </div>
+                    </ScrollArea>
+                </div>
 
                 {/* Canvas */}
-                <div className="flex-1 h-full bg-slate-50 border rounded-xl overflow-hidden shadow-sm relative" ref={reactFlowWrapper}>
+                <div className="flex-1 h-[calc(100vh-1rem)] bg-slate-100/50">
                     <ReactFlow
                         nodes={nodes}
                         edges={edges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
-                        onInit={setReactFlowInstance}
-                        onDrop={onDrop}
                         onDragOver={onDragOver}
+                        onDrop={onDrop}
                         nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
                         fitView
                         className="bg-slate-50"
+                        minZoom={0.2}
+                        maxZoom={1.5}
+                        defaultEdgeOptions={{ type: 'custom', animated: true }}
                     >
-                        <Controls className="bg-white border shadow-sm rounded-md overflow-hidden" />
-                        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#cbd5e1" />
-                        <Panel position="top-right" className="bg-white/90 p-2 rounded-lg border shadow-sm text-xs font-mono">
-                            Nodes: {nodes.length} | Edges: {edges.length}
+                        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#cbd5e1" />
+                        <Controls className="bg-white border shadow-sm rounded-lg overflow-hidden m-4" />
+                        <Panel position="top-right" className="bg-white/80 backdrop-blur p-2 rounded-lg border shadow-sm text-xs text-slate-500 font-medium">
+                            Drag steps from sidebar • Connect output to input
                         </Panel>
                     </ReactFlow>
                 </div>
             </div>
+
+            <div className="mt-6 border-t pt-6">
+                <div className="mb-4">
+                    <h2 className="text-lg font-semibold tracking-tight">Configuration Table</h2>
+                    <p className="text-sm text-muted-foreground">Detailed view of all workflow steps. Edits here sync with the graph.</p>
+                </div>
+                <div className="border rounded-lg overflow-hidden bg-white">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-slate-50">
+                                <TableHead className="w-[80px]">Order</TableHead>
+                                <TableHead>Step Name</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead className="w-[150px]">Dep. Type</TableHead>
+                                <TableHead>Depends On</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {workflowSteps?.map(step => {
+                                const isPlaced = nodes.some(n => n.id === step.key);
+                                const currentNode = nodes.find(n => n.id === step.key);
+
+                                // Get current state from node if placed, otherwise from API
+                                const displayOrder = currentNode ? (currentNode.data.displayOrder as number) : step.displayOrder;
+                                const depType = currentNode ? (currentNode.data.dependencyType as string) : step.dependencyType;
+                                const dependsOn = currentNode ? (currentNode.data.dependsOn as string[]) : step.dependsOn;
+
+                                const updateNodeData = (newData: any) => {
+                                    if (!isPlaced) {
+                                        toast.error("Place the step on the canvas first to edit its flow logic.");
+                                        return;
+                                    }
+                                    setNodes(nds => nds.map(n => n.id === step.key ? { ...n, data: { ...n.data, ...newData } } : n));
+                                };
+
+                                return (
+                                    <TableRow key={step.id}>
+                                        <TableCell>
+                                            <Input
+                                                type="number"
+                                                className="h-8 w-16 text-xs p-1"
+                                                value={displayOrder}
+                                                onChange={e => updateNodeData({ displayOrder: Number(e.target.value) })}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="font-medium text-sm">{step.name}</div>
+                                            <div className="text-[10px] text-muted-foreground font-mono">{step.key}</div>
+                                        </TableCell>
+                                        <TableCell><Badge variant="outline" className="text-[10px]">{step.requiredRole}</Badge></TableCell>
+                                        <TableCell>
+                                            <Select
+                                                value={depType}
+                                                onValueChange={v => updateNodeData({ dependencyType: v })}
+                                            >
+                                                <SelectTrigger className="h-8 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="NONE">NONE</SelectItem>
+                                                    <SelectItem value="ALL">ALL</SelectItem>
+                                                    <SelectItem value="ANY">ANY</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex flex-wrap gap-1 min-h-[24px]">
+                                                    {dependsOn && dependsOn.length > 0 ? (
+                                                        dependsOn.map(d => (
+                                                            <Badge key={d} variant="secondary" className="bg-slate-100 text-[9px] flex items-center gap-1 h-5">
+                                                                {d}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newDeps = dependsOn.filter(k => k !== d);
+                                                                        updateNodeData({ dependsOn: newDeps });
+                                                                        setEdges(eds => eds.filter(e => !(e.source === d && e.target === step.key)));
+                                                                    }}
+                                                                    className="hover:text-destructive"
+                                                                >
+                                                                    <X className="h-2.5 w-2.5" />
+                                                                </button>
+                                                            </Badge>
+                                                        ))
+                                                    ) : <span className="text-[10px] text-slate-400 italic">No dependencies</span>}
+                                                </div>
+                                                <Select onValueChange={v => {
+                                                    if (v === 'none') return;
+                                                    if (!isPlaced) {
+                                                        toast.error("Place the step on the canvas first.");
+                                                        return;
+                                                    }
+                                                    if (!dependsOn.includes(v)) {
+                                                        const newDeps = [...dependsOn, v];
+                                                        updateNodeData({ dependsOn: newDeps });
+                                                        // Add Edge
+                                                        setEdges(eds => addEdge({
+                                                            id: `e-${v}-${step.key}`,
+                                                            source: v,
+                                                            target: step.key,
+                                                            type: 'custom',
+                                                            animated: true,
+                                                            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
+                                                        }, eds));
+                                                    }
+                                                }}>
+                                                    <SelectTrigger className="h-7 text-[10px] w-full max-w-[150px]">
+                                                        <SelectValue placeholder="+ Add dep" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">Select dependency...</SelectItem>
+                                                        {workflowSteps?.filter(s => s.key !== step.key).map(s => (
+                                                            <SelectItem key={s.key} value={s.key} className="text-[10px]">{s.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {isPlaced ? <Badge className="bg-emerald-500 h-5 text-[9px]">Active</Badge> : <Badge variant="secondary" className="text-slate-500 h-5 text-[9px]">Unused</Badge>}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" onClick={() => handleEditClick(step)} className="h-8 w-8 p-0">
+                                                <Edit className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+
+            {/* Create Modal */}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle>Create New Step</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Name *</Label>
+                                <Input value={currentStep.name || ''} onChange={e => setCurrentStep({ ...currentStep, name: e.target.value })} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Key *</Label>
+                                <Input value={currentStep.key || ''} onChange={e => setCurrentStep({ ...currentStep, key: e.target.value })} />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Role *</Label>
+                            <Select value={currentStep.requiredRole} onValueChange={v => setCurrentStep({ ...currentStep, requiredRole: v })}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ICS">ICS</SelectItem>
+                                    <SelectItem value="SECURITY_OFFICER">Security Officer</SelectItem>
+                                    <SelectItem value="CUSTOM_OFFICER">Custom Officer</SelectItem>
+                                    <SelectItem value="INSA_OFFICER">INSA Officer</SelectItem>
+                                    <SelectItem value="MEDIA_LIAISON">Media Liaison</SelectItem>
+                                    {roles?.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Color</Label>
+                            <div className="flex gap-2">
+                                <Input type="color" className="w-12 p-0 border-0" value={currentStep.color || '#3b82f6'} onChange={e => setCurrentStep({ ...currentStep, color: e.target.value })} />
+                                <Input value={currentStep.color || ''} onChange={e => setCurrentStep({ ...currentStep, color: e.target.value })} />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreate} disabled={isCreating}>Create</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Modal (Enhanced with Dependencies) */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle>Edit Step: {currentStep.name}</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Name</Label>
+                                <Input value={currentStep.name || ''} onChange={e => setCurrentStep({ ...currentStep, name: e.target.value })} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Key (Read-only)</Label>
+                                <Input value={currentStep.key || ''} disabled className="bg-slate-50" />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Textarea value={currentStep.description || ''} onChange={e => setCurrentStep({ ...currentStep, description: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Role</Label>
+                                <Select value={currentStep.requiredRole} onValueChange={v => setCurrentStep({ ...currentStep, requiredRole: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ICS">ICS</SelectItem>
+                                        <SelectItem value="SECURITY_OFFICER">Security</SelectItem>
+                                        <SelectItem value="CUSTOM_OFFICER">Customs</SelectItem>
+                                        <SelectItem value="INSA_OFFICER">INSA</SelectItem>
+                                        <SelectItem value="MEDIA_LIAISON">Media</SelectItem>
+                                        {roles?.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Dependency Type</Label>
+                                <Select value={currentStep.dependencyType} onValueChange={v => setCurrentStep({ ...currentStep, dependencyType: v as any })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="NONE">NONE (Start)</SelectItem>
+                                        <SelectItem value="ALL">ALL (Mandatory)</SelectItem>
+                                        <SelectItem value="ANY">ANY (Optional)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Depends On</Label>
+                            <div className="flex flex-wrap gap-2 mb-2 p-2 border rounded-md bg-slate-50 min-h-[40px]">
+                                {currentStep.dependsOn?.length ? (
+                                    currentStep.dependsOn.map(depKey => (
+                                        <Badge key={depKey} variant="secondary" className="flex items-center gap-1">
+                                            {depKey}
+                                            <button
+                                                onClick={() => setCurrentStep({
+                                                    ...currentStep,
+                                                    dependsOn: currentStep.dependsOn?.filter(k => k !== depKey)
+                                                })}
+                                                className="hover:text-destructive"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    ))
+                                ) : (
+                                    <span className="text-xs text-slate-400 italic">No dependencies</span>
+                                )}
+                            </div>
+                            <Select onValueChange={v => {
+                                if (v === 'none') return;
+                                if (!currentStep.dependsOn?.includes(v)) {
+                                    setCurrentStep({
+                                        ...currentStep,
+                                        dependsOn: [...(currentStep.dependsOn || []), v]
+                                    });
+                                }
+                            }}>
+                                <SelectTrigger><SelectValue placeholder="Add dependency..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Select a step...</SelectItem>
+                                    {workflowSteps?.filter(s => s.key !== currentStep.key).map(s => (
+                                        <SelectItem key={s.key} value={s.key}>{s.name} ({s.key})</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Form Link</Label>
+                                <Select value={currentStep.formId?.toString() || "0"} onValueChange={v => setCurrentStep({ ...currentStep, formId: Number(v) })}>
+                                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0">None</SelectItem>
+                                        {forms?.map(f => <SelectItem key={f.form_id} value={f.form_id.toString()}>{f.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Display Order</Label>
+                                <Input
+                                    type="number"
+                                    value={currentStep.displayOrder}
+                                    onChange={e => setCurrentStep({ ...currentStep, displayOrder: Number(e.target.value) })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="flex justify-between">
+                        <Button variant="destructive" size="sm" onClick={handleDelete}><Trash2 className="w-4 h-4 mr-2" /> Delete</Button>
+                        <Button onClick={handleUpdate}>Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
-// Ensure the default export is present if required by the router, or named used elsewhere
 export default WorkflowBuilder;
