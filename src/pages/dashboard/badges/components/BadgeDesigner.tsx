@@ -7,9 +7,16 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BadgeCheck, Save, Move, Trash2, Image as ImageIcon, QrCode, Type, Layout, Settings as SettingsIcon, User } from 'lucide-react';
-import { useGetBadgeTemplatesQuery, useCreateBadgeConfigMutation, BadgeTemplate } from '@/store/services/api';
+import {
+    useGetBadgeTemplatesQuery,
+    useCreateBadgeConfigMutation,
+    useGetBadgeConfigByIdQuery,
+    useUpdateBadgeConfigMutation,
+    BadgeTemplate
+} from '@/store/services/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 interface DesignerElement {
     id: string;
@@ -25,9 +32,11 @@ interface DesignerElement {
     placeholder?: string; // e.g. '{{userName}}'
 }
 
-export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
+export function BadgeDesigner({ onSave, configId }: { onSave?: () => void; configId?: number | null }) {
     const { data: templates } = useGetBadgeTemplatesQuery();
+    const { data: existingConfig, isLoading: isLoadingConfig } = useGetBadgeConfigByIdQuery(configId as number, { skip: !configId });
     const [createConfig] = useCreateBadgeConfigMutation();
+    const [updateBadgeConfig] = useUpdateBadgeConfigMutation();
 
     const [selectedTemplate, setSelectedTemplate] = useState<BadgeTemplate | null>(null);
     const [elements, setElements] = useState<DesignerElement[]>([]);
@@ -39,9 +48,22 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
 
     const canvasRef = useRef<HTMLDivElement>(null);
 
-    // Initialize elements when template changes
+    // Initialize elements when template changes OR when loading existing config
     useEffect(() => {
-        if (selectedTemplate) {
+        if (existingConfig) {
+            setConfigName(existingConfig.name);
+            setSelectedTemplate(existingConfig.template || null);
+            setPrimaryColor(existingConfig.primaryColor);
+            setSecondaryColor(existingConfig.secondaryColor);
+            setIsActive(existingConfig.isActive);
+            if (existingConfig.layoutConfig) {
+                try {
+                    setElements(JSON.parse(existingConfig.layoutConfig));
+                } catch (e) {
+                    console.error("Failed to parse layout config", e);
+                }
+            }
+        } else if (selectedTemplate && !configId) {
             setElements([
                 { id: 'logo', type: 'logo', x: selectedTemplate.width / 2 - 25, y: 30, width: 50, height: 50 },
                 { id: 'qr', type: 'qr', x: selectedTemplate.width / 2 - 40, y: selectedTemplate.height - 100, width: 80, height: 80 },
@@ -51,27 +73,32 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
             ]);
             setPrimaryColor('#D4AF37');
         }
-    }, [selectedTemplate]);
+    }, [selectedTemplate, existingConfig, configId]);
 
     const handleSave = async () => {
         if (!selectedTemplate) return;
 
         const qrElement = elements.find(e => e.type === 'qr');
+        const payload = {
+            name: configName,
+            templateId: selectedTemplate.id,
+            primaryColor,
+            secondaryColor,
+            qrSize: qrElement?.width || 80,
+            qrX: qrElement?.x || 0,
+            qrY: qrElement?.y || 0,
+            layoutConfig: JSON.stringify(elements),
+            isActive
+        };
 
         try {
-            await createConfig({
-                name: configName,
-                templateId: selectedTemplate.id,
-                primaryColor,
-                secondaryColor,
-                qrSize: qrElement?.width || 80,
-                qrX: qrElement?.x || 0,
-                qrY: qrElement?.y || 0,
-                layoutConfig: JSON.stringify(elements),
-                isActive
-            }).unwrap();
-
-            toast.success('Badge configuration saved successfully!');
+            if (configId) {
+                await updateBadgeConfig({ id: configId, data: payload }).unwrap();
+                toast.success('Badge configuration updated successfully!');
+            } else {
+                await createConfig(payload).unwrap();
+                toast.success('Badge configuration saved successfully!');
+            }
             onSave?.();
         } catch (err) {
             console.error('Save failed:', err);
@@ -130,6 +157,14 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
         document.addEventListener('mouseup', onMouseUp);
     };
 
+    if (isLoadingConfig) {
+        return (
+            <div className="flex h-[600px] w-full items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
+    }
+
     const selectedElement = elements.find(e => e.id === selectedElementId);
 
     return (
@@ -155,7 +190,9 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
                         <div className="space-y-2">
                             <Label>Base Template</Label>
                             <Select
+                                value={selectedTemplate?.id.toString()}
                                 onValueChange={(val) => setSelectedTemplate(templates?.find(t => t.id === parseInt(val)) || null)}
+                                disabled={!!configId}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select a template" />
@@ -282,9 +319,17 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
                                         "w-full h-full flex items-center justify-center overflow-hidden",
                                         (el.type === 'qr' || el.type === 'logo' || el.type === 'photo') ? "bg-slate-200/20 border border-dashed border-slate-300" : ""
                                     )}>
-                                        {el.type === 'logo' && <ImageIcon className="h-2/3 w-2/3 text-slate-400" />}
+                                        {el.type === 'logo' && (
+                                            el.content && el.content.startsWith('http')
+                                                ? <img src={el.content} className="w-full h-full object-contain" alt="Logo" />
+                                                : <ImageIcon className="h-2/3 w-2/3 text-slate-400" />
+                                        )}
                                         {el.type === 'qr' && <QrCode className="h-2/3 w-2/3 text-slate-600" />}
-                                        {el.type === 'photo' && <User className="h-2/3 w-2/3 text-slate-400" />}
+                                        {el.type === 'photo' && (
+                                            el.content && el.content.startsWith('http')
+                                                ? <img src={el.content} className="w-full h-full object-cover" alt="User" />
+                                                : <User className="h-2/3 w-2/3 text-slate-400" />
+                                        )}
                                         {el.type === 'text' && (
                                             <span className="px-2">{el.content || 'Text'}</span>
                                         )}
@@ -326,18 +371,19 @@ export function BadgeDesigner({ onSave }: { onSave?: () => void }) {
                                 </div>
 
                                 <div className="space-y-4">
-                                    {(selectedElement.type === 'text') && (
+                                    {(selectedElement.type === 'text' || selectedElement.type === 'logo' || selectedElement.type === 'photo') && (
                                         <div className="space-y-2">
-                                            <Label>Text Content</Label>
+                                            <Label>{selectedElement.type === 'text' ? 'Text Content' : 'Image URL'}</Label>
                                             <Input
                                                 value={selectedElement.content || ''}
                                                 onChange={(e) => setElements(prev => prev.map(el =>
                                                     el.id === selectedElementId ? { ...el, content: e.target.value } : el
                                                 ))}
+                                                placeholder={selectedElement.type === 'text' ? 'Enter text...' : 'https://example.com/image.png'}
                                                 disabled={!!selectedElement.placeholder}
                                             />
                                             {selectedElement.placeholder && (
-                                                <p className="text-[10px] text-orange-600 font-medium">This text will be replaced by {selectedElement.placeholder} in the PDF.</p>
+                                                <p className="text-[10px] text-orange-600 font-medium">This field will be replaced by {selectedElement.placeholder} in the PDF by default, unless you provide a URL above.</p>
                                             )}
                                         </div>
                                     )}

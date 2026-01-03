@@ -67,7 +67,13 @@ export function BadgeCenter() {
                 </TabsContent>
 
                 <TabsContent value="designer" className="focus-visible:outline-none">
-                    <BadgeDesigner onSave={() => setActiveTab('configs')} />
+                    <BadgeDesigner
+                        configId={editingConfigId}
+                        onSave={() => {
+                            setEditingConfigId(null);
+                            setActiveTab('configs');
+                        }}
+                    />
                 </TabsContent>
 
                 <TabsContent value="gallery" className="focus-visible:outline-none">
@@ -77,8 +83,7 @@ export function BadgeCenter() {
                             <p className="text-slate-500">Choose a starting point for your custom badge design.</p>
                         </div>
                     </div>
-                    <BadgeGallery onSelect={(id) => {
-                        // In a real app, we might pass this to the designer
+                    <BadgeGallery onSelect={() => {
                         setActiveTab('designer');
                     }} />
                 </TabsContent>
