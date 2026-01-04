@@ -1291,23 +1291,23 @@ export const api = createApi({
 
         // Super Admin Dashboard Endpoints
         getSuperAdminOverview: builder.query<SuperAdminOverview, void>({
-            query: () => '/dashboard/super-admin/overview',
+            query: () => '/super-admin/overview',
             transformResponse: (response: SuperAdminOverviewResponse) => response.data,
         }),
         getSuperAdminCharts: builder.query<SuperAdminCharts, void>({
-            query: () => '/dashboard/super-admin/charts',
+            query: () => '/super-admin/charts',
             transformResponse: (response: SuperAdminChartsResponse) => response.data,
         }),
         getSuperAdminStakeholders: builder.query<SuperAdminStakeholder[], void>({
-            query: () => '/dashboard/super-admin/stakeholders',
+            query: () => '/super-admin/stakeholders',
             transformResponse: (response: SuperAdminStakeholdersResponse) => response.data,
         }),
         getSuperAdminStakeholderStatus: builder.query<SuperAdminStakeholderStatus, void>({
-            query: () => '/dashboard/super-admin/stakeholder-status',
+            query: () => '/super-admin/stakeholder-status',
             transformResponse: (response: SuperAdminStakeholderStatusResponse) => response.data,
         }),
         getSuperAdminPerformance: builder.query<SuperAdminPerformance[], void>({
-            query: () => '/dashboard/super-admin/performance',
+            query: () => '/super-admin/performance',
             transformResponse: (response: SuperAdminPerformanceResponse) => response.data,
         }),
         getAdminAnalytics: builder.query<AdminAnalyticsData, void>({
