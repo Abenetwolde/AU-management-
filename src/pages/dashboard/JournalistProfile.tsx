@@ -10,21 +10,46 @@ import { SystemCheckSuccess } from '@/components/SystemCheckSuccess';
 import { exportJournalistDetailToPDF } from '@/lib/export-utils';
 import { useAuth, UserRole } from '@/auth/context';
 import { MOCK_JOURNALISTS } from '@/data/mock';
-import { useApproveWorkflowStepMutation, Equipment as EquipmentType } from '@/store/services/api';
+import { 
+    useApproveWorkflowStepMutation, 
+    Equipment as EquipmentType,
+    useUpdateEquipmentStatusMutation 
+} from '@/store/services/api';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+// Define EquipmentStatus enum to match backend
+enum EquipmentStatus {
+    PENDING = 'PENDING',
+    APPROVED = 'APPROVED',
+    REJECTED = 'REJECTED'
+}
 
 export function JournalistProfile() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
-console.log(user);
+    const { user, checkPermission } = useAuth();
+    console.log(user);
+    
     // Workflow Mutation
     const [approveWorkflow, { isLoading: isStatusUpdating }] = useApproveWorkflowStepMutation();
-
+    // Equipment status mutation
+    const [updateEquipmentStatus, { isLoading: isEquipmentUpdating }] = useUpdateEquipmentStatusMutation();
+    
     const [application, setApplication] = useState<any>(null);
     const [notes, setNotes] = useState('');
+    const [showSystemCheck, setShowSystemCheck] = useState(false);
+    
+    // Equipment approval states
+    const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType | null>(null);
+    const [showEquipmentDialog, setShowEquipmentDialog] = useState(false);
+    const [equipmentStatus, setEquipmentStatus] = useState<EquipmentStatus>(EquipmentStatus.PENDING);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const [equipmentNotes, setEquipmentNotes] = useState('');
 
     useEffect(() => {
         if (location.state?.application) {
@@ -61,8 +86,6 @@ console.log(user);
         }
     }, [location.state, id]);
 
-
-    const [showSystemCheck, setShowSystemCheck] = useState(false);
     const countryName = (code: string) => code ? (en[code as keyof typeof en] || code) : 'Unknown';
 
     const handleDecision = async (status: 'APPROVED' | 'REJECTED') => {
@@ -70,7 +93,7 @@ console.log(user);
 
         // Ensure we have a workflow key
         const stepKey = user?.workflowStepKey;
-console.log(stepKey);
+        console.log(stepKey);
         if (!stepKey) {
             toast.error("You don't have a workflow key assigned to your role.");
             return;
@@ -94,6 +117,60 @@ console.log(stepKey);
         }
     };
 
+    // Handle equipment approval
+    const handleEquipmentApproval = async (equipmentId: number, status: EquipmentStatus) => {
+        if (!checkPermission('verification:equipment:single:update')) {
+            toast.error("You don't have permission to update equipment status");
+            return;
+        }
+
+        // Validate rejection reason if status is REJECTED
+        if (status === EquipmentStatus.REJECTED && !rejectionReason.trim()) {
+            toast.error('Rejection reason is required when rejecting equipment');
+            return;
+        }
+
+        try {
+            const payload = {
+                status,
+                rejectionReason: status === EquipmentStatus.REJECTED ? rejectionReason : undefined,
+                notes: equipmentNotes || undefined
+            };
+
+            await updateEquipmentStatus({
+                equipmentId,
+                ...payload
+            }).unwrap();
+
+            toast.success(`Equipment ${status.toLowerCase()} successfully`);
+            
+            // Update the equipment list in state
+            if (application && application.equipment) {
+                const updatedEquipment = application.equipment.map((item: EquipmentType) => 
+                    item.id === equipmentId 
+                        ? { ...item, status, rejectionReason: payload.rejectionReason }
+                        : item
+                );
+                setApplication({ ...application, equipment: updatedEquipment });
+            }
+            
+            // Reset and close dialog
+            setSelectedEquipment(null);
+            setShowEquipmentDialog(false);
+            setRejectionReason('');
+            setEquipmentNotes('');
+        } catch (err: any) {
+            toast.error(err?.data?.message || `Failed to update equipment status`);
+        }
+    };
+
+    // Open equipment approval dialog
+    const openEquipmentDialog = (equipment: EquipmentType, status: EquipmentStatus) => {
+        setSelectedEquipment(equipment);
+        setEquipmentStatus(status);
+        setShowEquipmentDialog(true);
+    };
+
     if (!application) {
         return <div className="p-8 text-center text-gray-500">Loading profile data...</div>;
     }
@@ -108,12 +185,13 @@ console.log(stepKey);
 
     const roleTitle = formData.occupation || 'Journalist';
     const country = formData.country || 'ET';
-    const photoUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop";
+    const photoUrl = "https://tse4.mm.bing.net/th/id/OIP.YjAp0OwzYdsFmoWOeoK57AHaEg?pid=Api&P=0&h=220";
     const organization = "News Org"; // Placeholder or from API if avail
 
     // Authorization
     const canApprove = user?.role === UserRole.SUPER_ADMIN || !!user?.workflowStepKey;
     const isCustoms = user?.role === UserRole.CUSTOMS_OFFICER;
+    const canUpdateEquipment = checkPermission('verification:equipment:single:update');
 
     return (
         <div className="space-y-6">
@@ -318,9 +396,47 @@ console.log(stepKey);
                                                         </div>
                                                         <div>
                                                             <p className="text-xs font-bold text-gray-400 uppercase">STATUS</p>
-                                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${item.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
+                                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${item.status === 'APPROVED' ? 'bg-green-100 text-green-700' : item.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                                {item.status}
+                                                            </span>
                                                         </div>
                                                     </div>
+                                                    
+                                                    {item.rejectionReason && item.status === 'REJECTED' && (
+                                                        <div className="mt-2 pt-2 border-t">
+                                                            <p className="text-xs font-bold text-gray-400 uppercase">REJECTION REASON</p>
+                                                            <p className="text-sm text-red-600">{item.rejectionReason}</p>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Equipment Approval Buttons */}
+                                                    {canUpdateEquipment && item.status !== 'APPROVED' && (
+                                                        <div className="mt-4 pt-4 border-t flex gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                className="bg-[#009b4d] hover:bg-[#007a3d] text-white font-bold"
+                                                                onClick={() => openEquipmentDialog(item, EquipmentStatus.APPROVED)}
+                                                                disabled={isEquipmentUpdating}
+                                                            >
+                                                                {isEquipmentUpdating && selectedEquipment?.id === item.id ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                                ) : (
+                                                                    <Check className="h-4 w-4 mr-2" />
+                                                                )}
+                                                                Approve Equipment
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="text-red-600 border-red-200 hover:bg-red-50 font-bold"
+                                                                onClick={() => openEquipmentDialog(item, EquipmentStatus.REJECTED)}
+                                                                disabled={isEquipmentUpdating}
+                                                            >
+                                                                <X className="h-4 w-4 mr-2" />
+                                                                Reject Equipment
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -347,40 +463,40 @@ console.log(stepKey);
                             <SystemCheckSuccess show={showSystemCheck} />
 
                             {/* {canApprove && ( */}
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">Decision Notes</label>
-                                        <Textarea
-                                            placeholder="Enter approval/rejection notes..."
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            className="min-h-[100px] text-sm"
-                                        />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            className="flex-1 bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
-                                            onClick={() => handleDecision('APPROVED')}
-                                            disabled={isStatusUpdating || application.status === 'APPROVED'}
-                                        >
-                                            {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                                            {application.status === 'APPROVED' ? 'Approved' : 'Approve'}
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold shadow-sm"
-                                            onClick={() => handleDecision('REJECTED')}
-                                            disabled={isStatusUpdating || application.status === 'APPROVED'}
-                                        >
-                                            <X className="h-4 w-4 mr-2" /> Reject
-                                        </Button>
-                                    </div>
-                                    {user?.workflowStepKey && (
-                                        <p className="text-[10px] text-center text-gray-500">
-                                            Acting as: <span className="font-bold uppercase">{user.workflowStepKey}</span>
-                                        </p>
-                                    )}
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Decision Notes</label>
+                                    <Textarea
+                                        placeholder="Enter approval/rejection notes..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        className="min-h-[100px] text-sm"
+                                    />
                                 </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        className="flex-1 bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
+                                        onClick={() => handleDecision('APPROVED')}
+                                        disabled={isStatusUpdating || application.status === 'APPROVED'}
+                                    >
+                                        {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                        {application.status === 'APPROVED' ? 'Approved' : 'Approve'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold shadow-sm"
+                                        onClick={() => handleDecision('REJECTED')}
+                                        disabled={isStatusUpdating || application.status === 'APPROVED'}
+                                    >
+                                        <X className="h-4 w-4 mr-2" /> Reject
+                                    </Button>
+                                </div>
+                                {user?.workflowStepKey && (
+                                    <p className="text-[10px] text-center text-gray-500">
+                                        Acting as: <span className="font-bold uppercase">{user.workflowStepKey}</span>
+                                    </p>
+                                )}
+                            </div>
                             {/* )} */}
 
                             {isCustoms && (
@@ -408,6 +524,87 @@ console.log(stepKey);
                     </Card>
                 </div>
             </div>
+
+            {/* Equipment Approval Dialog */}
+            <Dialog open={showEquipmentDialog} onOpenChange={setShowEquipmentDialog}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {equipmentStatus === EquipmentStatus.APPROVED ? 'Approve Equipment' : 'Reject Equipment'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedEquipment && (
+                                <div className="mt-2">
+                                    <p className="font-semibold">{selectedEquipment.type}</p>
+                                    <p className="text-sm text-gray-600">{selectedEquipment.description}</p>
+                                </div>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="equipment-notes">Notes (Optional)</Label>
+                            <Textarea
+                                id="equipment-notes"
+                                placeholder="Enter any notes about this equipment..."
+                                value={equipmentNotes}
+                                onChange={(e) => setEquipmentNotes(e.target.value)}
+                                className="min-h-[80px]"
+                            />
+                        </div>
+                        
+                        {equipmentStatus === EquipmentStatus.REJECTED && (
+                            <div className="space-y-2">
+                                <Label htmlFor="rejection-reason" className="text-red-600">
+                                    Rejection Reason *
+                                </Label>
+                                <Textarea
+                                    id="rejection-reason"
+                                    placeholder="Please provide a reason for rejecting this equipment..."
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    className="min-h-[100px] border-red-200 focus-visible:ring-red-500"
+                                    required
+                                />
+                                <p className="text-xs text-red-500">Rejection reason is required</p>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowEquipmentDialog(false);
+                                setRejectionReason('');
+                                setEquipmentNotes('');
+                            }}
+                            disabled={isEquipmentUpdating}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => selectedEquipment && handleEquipmentApproval(selectedEquipment.id, equipmentStatus)}
+                            disabled={isEquipmentUpdating || (equipmentStatus === EquipmentStatus.REJECTED && !rejectionReason.trim())}
+                            className={
+                                equipmentStatus === EquipmentStatus.APPROVED 
+                                    ? 'bg-[#009b4d] hover:bg-[#007a3d]' 
+                                    : 'bg-red-600 hover:bg-red-700'
+                            }
+                        >
+                            {isEquipmentUpdating ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : equipmentStatus === EquipmentStatus.APPROVED ? (
+                                <Check className="h-4 w-4 mr-2" />
+                            ) : (
+                                <X className="h-4 w-4 mr-2" />
+                            )}
+                            {equipmentStatus === EquipmentStatus.APPROVED ? 'Approve Equipment' : 'Reject Equipment'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

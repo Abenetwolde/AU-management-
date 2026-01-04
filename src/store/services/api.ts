@@ -595,6 +595,20 @@ export interface UsersResponse {
     };
 }
 
+
+export enum EquipmentStatus {
+    PENDING = 'PENDING',
+    APPROVED = 'APPROVED',
+    REJECTED = 'REJECTED'
+}
+
+export interface UpdateEquipmentStatusPayload {
+    equipmentId: number;
+    status: EquipmentStatus;
+    rejectionReason?: string;
+    notes?: string;
+}
+
 // export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
 export const FILE_BASE_URL = 'http://localhost:3000';
 // Super Admin Dashboard Types
@@ -1143,6 +1157,23 @@ export const api = createApi({
             invalidatesTags: ['Badge'],
         }),
 
+        // Add this endpoint to the endpoints builder (you can place it near other equipment/verification endpoints)
+        updateEquipmentStatus: builder.mutation<Equipment, UpdateEquipmentStatusPayload>({
+            query: ({ equipmentId, status, rejectionReason, notes }) => ({
+                url: `/verification/single-equipment/${equipmentId}`,
+                method: 'POST',
+                body: {
+                    status,
+                    ...(rejectionReason && { rejectionReason }),
+                    ...(notes && { notes }),
+                },
+            }),
+            invalidatesTags: (result, error, { equipmentId }) => [
+                { type: 'Application', id: 'LIST' },
+                { type: 'Application', id: equipmentId },
+            ],
+        }),
+
         // Dashboard Endpoints
         getDashboardForms: builder.query<DashboardForm[], void>({
             query: () => '/dashboard/forms',
@@ -1311,7 +1342,7 @@ export const api = createApi({
             transformResponse: (response: SuperAdminPerformanceResponse) => response.data,
         }),
         getAdminAnalytics: builder.query<AdminAnalyticsData, void>({
-            query: () => '/dashboard/admin/analytics',
+            query: () => '/admin/analytics',
             transformResponse: (response: AdminAnalyticsResponse) => response.data,
         }),
     }),
@@ -1353,6 +1384,8 @@ export const {
     useGetLandingPageSettingsQuery,
     useCreateLandingPageSettingsMutation,
     useDeleteLandingPageSettingsMutation,
+    useUpdateEquipmentStatusMutation,
+
 
     // New Workflow hooks
     useGetWorkflowStepsQuery,
