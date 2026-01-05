@@ -3,16 +3,15 @@ import { useGetLetterConfigsQuery, useDeleteLetterConfigMutation, LetterConfig }
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit2, Send, Trash2, FileText, Calendar, Layout } from "lucide-react";
+import { Edit2, Trash2, FileText, Calendar, Layout } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props {
     onEdit: (config: LetterConfig) => void;
-    onSend: (config: LetterConfig) => void;
 }
 
-export const ConfigList: React.FC<Props> = ({ onEdit, onSend }) => {
+export const ConfigList: React.FC<Props> = ({ onEdit }) => {
     const { data: configs, isLoading } = useGetLetterConfigsQuery();
     const [deleteConfig] = useDeleteLetterConfigMutation();
 
@@ -72,21 +71,14 @@ export const ConfigList: React.FC<Props> = ({ onEdit, onSend }) => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 pt-4 border-top border-slate-100 mt-2">
+                        <div className="pt-4 border-t border-slate-100 mt-2">
                             <Button
                                 onClick={() => onEdit(config)}
                                 variant="outline"
                                 size="sm"
-                                className="h-9 text-xs border-slate-200 hover:bg-slate-50"
+                                className="w-full h-10 text-xs border-slate-200 hover:bg-slate-50 hover:text-primary hover:border-primary/30 transition-all font-semibold"
                             >
-                                <Edit2 className="h-3.5 w-3.5 mr-2" /> Edit Design
-                            </Button>
-                            <Button
-                                onClick={() => onSend(config)}
-                                size="sm"
-                                className="h-9 text-xs bg-primary hover:bg-primary/90 text-white"
-                            >
-                                <Send className="h-3.5 w-3.5 mr-2" /> Bulk Send
+                                <Edit2 className="h-3.5 w-3.5 mr-2" /> Edit Design & Config
                             </Button>
                         </div>
                         <Button
