@@ -1085,6 +1085,13 @@ export const api = createApi({
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
         }),
+        getFilteredApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string; country: string }>({
+            query: ({ page = 1, limit = 10, search = '', country }) => {
+                return `/applications/filter/country?page=${page}&limit=${limit}&search=${search}&country=${country}`;
+            },
+            transformResponse: (response: ApplicationsResponse) => response.data,
+            providesTags: ['Application'],
+        }),
         // Organizations
         getOrganizations: builder.query<Organization[], void>({
             query: () => '/organizations',
