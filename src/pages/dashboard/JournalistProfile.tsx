@@ -111,7 +111,22 @@ export function JournalistProfile() {
             }).unwrap();
 
             toast.success(`Application ${status.toLowerCase()} successfully`);
-            setApplication({ ...application, status: status === 'APPROVED' ? 'APPROVED' : 'REJECTED' });
+
+            // Optimistic Update: Update the specific approval in the list
+            const updatedApprovals = (application.applicationApprovals || application.approvals || []).map((app: any) => {
+                const stepKey = app.workflowStep?.key || app.approvalWorkflowStep?.key;
+                if (stepKey === effectiveStepKey) {
+                    return { ...app, status };
+                }
+                return app;
+            });
+
+            setApplication({
+                ...application,
+                applicationApprovals: updatedApprovals,
+                approvals: updatedApprovals,
+                status: status === 'APPROVED' ? application.status : 'REJECTED' // Don't flip global to APPROVED immediately unless logic dictates, but definitely flip REJECTED
+            });
             setNotes('');
         } catch (err: any) {
             toast.error(err?.data?.message || `Failed to ${status.toLowerCase()} application`);
