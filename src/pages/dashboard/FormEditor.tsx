@@ -201,13 +201,30 @@ export function FormEditor() {
         } else if (!isEditMode && templates && fields.length === 0) {
             const mappedFields: FormField[] = templates.map(t => {
                 let type: FormField['type'] = 'text';
+
+                // Map DB types to Frontend types
                 if (t.field_type === 'textarea') type = 'textarea';
                 else if (t.field_type === 'date') type = 'date';
-                else if (t.field_type === 'boolean') type = 'radio';
+                else if (t.field_type === 'boolean') type = 'radio'; // render as radio with True/False
                 else if (t.field_type === 'email') type = 'email';
                 else if (t.field_type === 'number') type = 'number';
+                else if (t.field_type === 'file') type = 'file';
+                else if (t.field_type === 'select' || t.field_type === 'dropdown') type = 'dropdown';
+                else if (t.field_type === 'radio') type = 'radio';
+                else if (t.field_type === 'checkbox') type = 'checkbox';
 
-                const options = t.field_options?.options || (t.field_type === 'boolean' ? ['True', 'False'] : undefined);
+
+                let parsedOptions: string[] | undefined;
+                try {
+                    if (t.field_options) {
+                        const parsed = JSON.parse(t.field_options);
+                        parsedOptions = parsed.options || undefined;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse field_options', e);
+                }
+
+                const options = parsedOptions || (t.field_type === 'boolean' ? ['True', 'False'] : undefined);
 
                 return {
                     id: String(t.template_id),
@@ -215,7 +232,7 @@ export function FormEditor() {
                     type,
                     label: t.label,
                     required: t.is_required,
-                    placeholder: t.placeholder || `Enter ${t.label.toLowerCase()}`,
+                    placeholder: `Enter ${t.label.toLowerCase()}`,
                     options,
                     validation: typeof t.validation_criteria === 'string' ? JSON.parse(t.validation_criteria) : t.validation_criteria || {},
                     displayOrder: t.display_order,
