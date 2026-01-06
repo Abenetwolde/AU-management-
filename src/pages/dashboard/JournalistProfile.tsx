@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Phone, FileText, Plane, Briefcase, Check, X, ShieldCheck, Download, ChevronLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { FileText, Briefcase, Check, X, ShieldCheck, Download, ChevronLeft, Loader2 } from 'lucide-react';
 import { getFlagEmoji } from '@/lib/utils';
 import en from 'react-phone-number-input/locale/en';
 import { SystemCheckSuccess } from '@/components/SystemCheckSuccess';
@@ -14,7 +14,8 @@ import {
     useApproveWorkflowStepMutation,
     Equipment as EquipmentType,
     useUpdateEquipmentStatusMutation,
-    getFileUrl
+    getFileUrl,
+    useGetFormFieldTemplatesQuery
 } from '@/store/services/api';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,6 +41,9 @@ export function JournalistProfile() {
     const [approveWorkflow, { isLoading: isStatusUpdating }] = useApproveWorkflowStepMutation();
     // Equipment status mutation
     const [updateEquipmentStatus, { isLoading: isEquipmentUpdating }] = useUpdateEquipmentStatusMutation();
+
+    // Fetch dynamic form templates
+    const { data: templates, isLoading: templatesLoading } = useGetFormFieldTemplatesQuery();
 
     const [application, setApplication] = useState<any>(null);
     const [notes, setNotes] = useState('');
@@ -187,7 +191,7 @@ export function JournalistProfile() {
         setShowEquipmentDialog(true);
     };
 
-    if (!application) {
+    if (!application || templatesLoading) {
         return <div className="p-8 text-center text-gray-500">Loading profile data...</div>;
     }
 
@@ -209,9 +213,6 @@ export function JournalistProfile() {
     };
 
     const profilePhotos = getFiles(formData.profile_photo || formData.passport_photo);
-    const pressCards = getFiles(formData.press_card_copy);
-    const assignmentLetters = getFiles(formData.assignment_letter);
-    const passportScans = getFiles(formData.passport_scan);
 
     const photoUrl = profilePhotos.length > 0
         ? getFileUrl(profilePhotos[0])
@@ -286,216 +287,92 @@ export function JournalistProfile() {
                     </Card>
 
                     {/* Tabs */}
-                    <Tabs defaultValue="personal" className="w-full">
+                    <Tabs defaultValue={templates && templates.length > 0 ? (templates[0]?.category?.name || 'Other Details') : "equipment"} className="w-full">
                         <div className="bg-white rounded-lg p-1 shadow-sm mb-4">
                             <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-6 border-b rounded-none px-4 flex-wrap">
-                                <TabsTrigger value="personal" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <User className="h-4 w-4" /> Personal Details
-                                </TabsTrigger>
-                                <TabsTrigger value="contact" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <Phone className="h-4 w-4" /> Contact Info
-                                </TabsTrigger>
-                                <TabsTrigger value="passport" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <FileText className="h-4 w-4" /> Passport Info
-                                </TabsTrigger>
-                                <TabsTrigger value="arrival" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <Plane className="h-4 w-4" /> Arrival Info
-                                </TabsTrigger>
-                                <TabsTrigger value="documents" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
-                                    <FileText className="h-4 w-4" /> Documents
-                                </TabsTrigger>
+                                {/* Dynamic Tabs */}
+                                {templates && Object.keys(
+                                    templates.reduce((acc: any, t: any) => {
+                                        const cat = t.category?.name || 'Other Details';
+                                        if (cat.toLowerCase() === 'equipment') return acc;
+                                        acc[cat] = true;
+                                        return acc;
+                                    }, {})
+                                ).map((cat: string) => (
+                                    <TabsTrigger key={cat} value={cat} className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
+                                        <FileText className="h-4 w-4" /> {cat}
+                                    </TabsTrigger>
+                                ))}
+
                                 <TabsTrigger value="equipment" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none pb-3 px-0 gap-2 font-bold text-gray-500">
                                     <Briefcase className="h-4 w-4" /> Equipment
                                 </TabsTrigger>
                             </TabsList>
                         </div>
 
-                        {/* Personal Details Content */}
-                        <TabsContent value="personal">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Personal Details</CardTitle>
-                                    <User className="h-5 w-5 text-blue-600" />
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">FULL NAME</p><p className="text-sm font-bold text-gray-900 mt-1">{fullname}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DOB</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.date_of_birth || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">GENDER</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.gender || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">NATIONALITY</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(country)}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PLACE OF BIRTH</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.place_of_birth || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">COUNTRY OF BIRTH</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(formData.country_of_birth)}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">CITIZENSHIP</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.citizenship || countryName(country)}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">OCCUPATION</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.occupation || 'N/A'}</p></div>
-                                    <div className="col-span-1 sm:col-span-2 lg:col-span-4"><p className="text-xs font-bold text-gray-400 uppercase">ADDRESS</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.address_line_1}, {formData.address_line_2 ? `${formData.address_line_2}, ` : ''}{formData.city}, {formData.state_province_region ? `${formData.state_province_region}, ` : ''}{formData.zip_postal_code}</p></div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        {/* Contact Info Content */}
-                        <TabsContent value="contact">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Contact Info</CardTitle>
-                                    <Phone className="h-5 w-5 text-teal-500" />
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">EMAIL</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.email}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PHONE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.phone}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ZIP CODE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.zip_postal_code || 'N/A'}</p></div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        {/* Passport Info Content */}
-                        <TabsContent value="passport">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Passport Information</CardTitle>
-                                    <FileText className="h-5 w-5 text-yellow-500" />
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">PASSPORT NO</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_number}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUING COUNTRY</p><p className="text-sm font-bold text-gray-900 mt-1">{countryName(country)}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ISSUE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_issue_date || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">EXPIRY DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.passport_expiry_date || 'N/A'}</p></div>
-
-                                    {passportScans.length > 0 && (
-                                        <div className="col-span-1 sm:col-span-2 lg:col-span-4 mt-4">
-                                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">PASSPORT SCANS</p>
-                                            <div className="flex flex-wrap gap-4">
-                                                {passportScans.map((file: string, idx: number) => (
-                                                    <a
-                                                        key={idx}
-                                                        href={getFileUrl(file)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="group relative h-32 w-48 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0"
-                                                    >
-                                                        <div className="h-full w-full flex flex-col items-center justify-center p-2">
-                                                            <FileText className="h-8 w-8 text-gray-400 mb-2" />
-                                                            <span className="text-[10px] text-gray-500 truncate w-full text-center px-2">
-                                                                Passport Scan {idx + 1}
-                                                            </span>
+                        {/* Dynamic Content Tabs */}
+                        {Object.entries(
+                            (templates || []).reduce((acc: any, template: any) => {
+                                const catName = template.category?.name || 'Other Details';
+                                // Skip equipment category if it exists in templates, handled separately
+                                if (catName.toLowerCase() === 'equipment') return acc;
+                                if (!acc[catName]) acc[catName] = [];
+                                acc[catName].push(template);
+                                return acc;
+                            }, {})
+                        ).map(([categoryName, catTemplates]: [string, any]) => (
+                            <TabsContent key={categoryName} value={categoryName}>
+                                <Card className="bg-white border-0 shadow-sm">
+                                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                        <CardTitle className="text-lg font-bold">{categoryName}</CardTitle>
+                                        <FileText className="h-5 w-5 text-gray-500" />
+                                    </CardHeader>
+                                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+                                        {(catTemplates as any[])
+                                            .sort((a, b) => a.display_order - b.display_order)
+                                            .map((template) => {
+                                                const value = formData[template.field_name];
+                                                if (template.field_type === 'file') {
+                                                    const files = getFiles(value);
+                                                    if (files.length === 0) return null;
+                                                    return (
+                                                        <div key={template.field_name} className="col-span-1 sm:col-span-2 lg:col-span-4 mt-2">
+                                                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">{template.label}</p>
+                                                            <div className="flex flex-wrap gap-4">
+                                                                {files.map((file: string, idx: number) => (
+                                                                    <a
+                                                                        key={idx}
+                                                                        href={getFileUrl(file)}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="group relative h-32 w-48 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0"
+                                                                    >
+                                                                        <div className="h-full w-full flex flex-col items-center justify-center p-2">
+                                                                            <FileText className="h-8 w-8 text-blue-400 mb-2" />
+                                                                            <span className="text-[10px] text-gray-500 truncate w-full text-center px-2">
+                                                                                {template.label} {idx + 1}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                            <Download className="h-5 w-5 text-white" />
+                                                                        </div>
+                                                                    </a>
+                                                                ))}
+                                                            </div>
                                                         </div>
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <Download className="h-5 w-5 text-white" />
-                                                        </div>
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        {/* Documents Content */}
-                        <TabsContent value="documents">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Uploaded Documents</CardTitle>
-                                    <FileText className="h-5 w-5 text-purple-600" />
-                                </CardHeader>
-                                <CardContent className="space-y-6 pt-4">
-                                    {pressCards.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">PRESS CARD / MEDIA ID</p>
-                                            <div className="flex flex-wrap gap-4">
-                                                {pressCards.map((file: string, idx: number) => (
-                                                    <a
-                                                        key={idx}
-                                                        href={getFileUrl(file)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="group relative h-32 w-48 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0"
-                                                    >
-                                                        <div className="h-full w-full flex flex-col items-center justify-center p-2">
-                                                            <FileText className="h-8 w-8 text-blue-400 mb-2" />
-                                                            <span className="text-[10px] text-gray-500 truncate w-full text-center px-2">
-                                                                Press Card {idx + 1}
-                                                            </span>
-                                                        </div>
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <Download className="h-5 w-5 text-white" />
-                                                        </div>
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {assignmentLetters.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">ASSIGNMENT LETTER / MEDIA LICENSE</p>
-                                            <div className="flex flex-wrap gap-4">
-                                                {assignmentLetters.map((file: string, idx: number) => (
-                                                    <a
-                                                        key={idx}
-                                                        href={getFileUrl(file)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="group relative h-32 w-48 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0"
-                                                    >
-                                                        <div className="h-full w-full flex flex-col items-center justify-center p-2">
-                                                            <FileText className="h-8 w-8 text-green-400 mb-2" />
-                                                            <span className="text-[10px] text-gray-500 truncate w-full text-center px-2">
-                                                                Assignment Letter {idx + 1}
-                                                            </span>
-                                                        </div>
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <Download className="h-5 w-5 text-white" />
-                                                        </div>
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {pressCards.length === 0 && assignmentLetters.length === 0 && (
-                                        <p className="text-sm text-gray-500 italic">No additional documents uploaded.</p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        {/* Arrival Info Content */}
-                        <TabsContent value="arrival">
-                            <Card className="bg-white border-0 shadow-sm">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-lg font-bold">Arrival Information</CardTitle>
-                                    <Plane className="h-5 w-5 text-green-500" />
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">ARRIVAL DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.arrival_date}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE DATE</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_date || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">FLIGHT</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.airlines_and_flight_number || 'N/A'}</p></div>
-                                    <div><p className="text-xs font-bold text-gray-400 uppercase">DEPARTURE CITY</p><p className="text-sm font-bold text-gray-900 mt-1">{formData.departure_country_and_city || 'N/A'}</p></div>
-
-                                    <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">ACCOMMODATION</p>
-                                        <p className="text-sm font-bold text-gray-900 mt-1">{formData.accommodation_details || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">SPECIAL REQUIREMENTS</p>
-                                        <p className="text-sm text-gray-700 mt-1">{formData.special_requirements || 'None'}</p>
-                                    </div>
-
-                                    <div className="col-span-4 border-t pt-4 mt-2">
-                                        <h4 className="text-sm font-bold mb-3 text-gray-900">Additional Declarations</h4>
-                                        <div className="grid grid-cols-4 gap-4">
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-400 uppercase">HAS DRONE</p>
-                                                <p className="text-sm font-bold text-gray-900 mt-1">{formData.has_drone === 'true' || formData.has_drone === true ? 'Yes' : 'No'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-400 uppercase">DECLARATION</p>
-                                                <p className="text-sm font-bold text-gray-900 mt-1">{formData.declaration_status === 'true' || formData.declaration_status === true ? 'Yes' : 'No'}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
+                                                    );
+                                                }
+                                                return (
+                                                    <div key={template.field_name} className={template.field_type === 'textarea' ? 'col-span-1 sm:col-span-2 lg:col-span-4' : ''}>
+                                                        <p className="text-xs font-bold text-gray-400 uppercase">{template.label}</p>
+                                                        <p className="text-sm font-bold text-gray-900 mt-1">{value?.toString() || 'N/A'}</p>
+                                                    </div>
+                                                );
+                                            })}
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                        ))}
 
                         {/* Equipment Content - Prioritized */}
                         <TabsContent value="equipment">

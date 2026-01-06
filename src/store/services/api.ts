@@ -151,6 +151,11 @@ export interface FormFieldTemplate {
     visibility_condition: string | null;
     created_at: string;
     updated_at: string;
+    category?: {
+        name: string;
+        description?: string;
+        icon?: string;
+    };
 }
 
 export interface EmailTemplate {
