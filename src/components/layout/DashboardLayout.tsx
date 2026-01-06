@@ -45,6 +45,7 @@ export function DashboardLayout() {
             {/* Mobile Header */}
             <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
                 <div className="flex items-center gap-2">
+<<<<<<< HEAD
                     <img src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getLogo()} alt="Logo" className="h-8 w-auto object-contain" />
                     {user?.organization?.name ? (
                         <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
@@ -55,6 +56,12 @@ export function DashboardLayout() {
                             SUPERADMIN
                         </h1>
                     )}
+=======
+                    {/* <img src={getLogo()} alt="Logo" className="h-8 w-auto object-contain" /> */}
+                    <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
+                        {getTitle()}
+                    </h1>
+>>>>>>> 132371bf (minor change)
                 </div>
                 <Button
                     variant="ghost"
@@ -79,14 +86,31 @@ export function DashboardLayout() {
                 "fixed inset-y-0 left-0 z-[70] w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 shadow-2xl md:shadow-none",
                 isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             )}>
+<<<<<<< HEAD
                 <div className="p-6 flex flex-col items-center justify-center border-b border-gray-50 mb-4 relaitve">
                     <Button
+=======
+                <div className="p-6 flex items-center justify-between border-b border-gray-50 ">
+                    <div className="flex items-start flex-col gap-1 text-primary">
+                        {/* <img src={getLogo()} alt="Logo" className="h-10 w-auto" /> */}
+                        <h1 className="text-lg font-bold font-sans leading-tight">
+                            {getTitle()}
+                        </h1>
+                
+                        <p>
+                            {user?.email}
+                        </p>
+                        
+                    </div>
+                    {/* <Button
+>>>>>>> 132371bf (minor change)
                         variant="ghost"
                         size="icon"
                         className="md:hidden absolute right-4 top-4 hover:bg-gray-100 rounded-xl"
                         onClick={() => setIsMobileMenuOpen(false)}
                     >
                         <X className="h-5 w-5 text-gray-500" />
+<<<<<<< HEAD
                     </Button>
                     <div className="flex flex-col items-center gap-4 text-primary w-full text-center">
                         <img src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getLogo()} alt="Logo" className="h-20 w-auto object-contain transition-all hover:scale-105 duration-300" />
@@ -96,9 +120,12 @@ export function DashboardLayout() {
                             </h1>
                         )}
                     </div>
+=======
+                    </Button> */}
+>>>>>>> 132371bf (minor change)
                 </div>
 
-                <div className="border-b border-primary mx-4 mb-6"></div>
+                <div className="border-b border-primary mx-4 mb-2"></div>
 
                 <ScrollArea className="flex-1 px-4">
                     <nav className="space-y-2 pr-2">
@@ -432,7 +459,11 @@ export function DashboardLayout() {
             </aside >
 
             {/* Main Content */}
+<<<<<<< HEAD
             < main className="flex-1 md:ml-72 pt-20 md:pt-4 p-4 md:p-8 flex flex-col min-h-screen overflow-x-hidden" >
+=======
+            <main className="flex-1 md:ml-72 pt-20 md:pt-4 p-4 md:p-8 flex flex-col min-h-screen mx-auto">
+>>>>>>> 132371bf (minor change)
                 <div className="max-w-[1600px] w-full mx-auto">
                     <Outlet />
                 </div>
