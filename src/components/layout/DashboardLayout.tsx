@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/auth/context';
 import { cn } from '@/lib/utils';
 import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, FileText, Settings, Building2, GitMerge, ShieldAlert, Shield, Menu, X, Activity } from 'lucide-react';
+import { getFileUrl } from '@/store/services/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import emmpaLogo from '@/assests/emmpa.png';
@@ -38,27 +39,18 @@ export function DashboardLayout() {
         return emmpaLogo;
     };
 
-    const getTitle = () => {
-        if (user?.roleName) return user.roleName;
-
-        if (user?.role === UserRole.SUPER_ADMIN) return 'Super Admin';
-        if (user?.role === UserRole.ICS_OFFICER) return 'ICS Officer';
-        if (user?.role === UserRole.NISS_OFFICER) return 'NISS Officer';
-        if (user?.role === UserRole.INSA_OFFICER) return 'INSA Officer';
-        if (user?.role === UserRole.CUSTOMS_OFFICER) return 'Customs Officer';
-        if (user?.role === UserRole.AU_ADMIN) return 'AU Admin';
-        return 'EMA (Ethiopian Media Authority)';
-    };
 
     return (
         <div className="flex min-h-screen bg-gray-50/50">
             {/* Mobile Header */}
             <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
                 <div className="flex items-center gap-2">
-                    <img src={getLogo()} alt="Logo" className="h-8 w-auto object-contain" />
-                    <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
-                        {getTitle()}
-                    </h1>
+                    <img src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getLogo()} alt="Logo" className="h-8 w-auto object-contain" />
+                    {user?.organization?.name && (
+                        <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
+                            {user.organization.name}
+                        </h1>
+                    )}
                 </div>
                 <Button
                     variant="ghost"
@@ -83,21 +75,23 @@ export function DashboardLayout() {
                 "fixed inset-y-0 left-0 z-[70] w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 shadow-2xl md:shadow-none",
                 isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="p-6 flex items-center justify-between border-b border-gray-50 mb-4">
-                    <div className="flex items-center gap-3 text-primary">
-                        <img src={getLogo()} alt="Logo" className="h-10 w-auto" />
-                        <h1 className="text-lg font-bold font-sans leading-tight">
-                            {getTitle()}
-                        </h1>
-                    </div>
+                <div className="p-6 flex flex-col items-center justify-center border-b border-gray-50 mb-4 relaitve">
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="md:hidden hover:bg-gray-100 rounded-xl"
+                        className="md:hidden absolute right-4 top-4 hover:bg-gray-100 rounded-xl"
                         onClick={() => setIsMobileMenuOpen(false)}
                     >
                         <X className="h-5 w-5 text-gray-500" />
                     </Button>
+                    <div className="flex flex-col items-center gap-4 text-primary w-full text-center">
+                        <img src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getLogo()} alt="Logo" className="h-20 w-auto object-contain transition-all hover:scale-105 duration-300" />
+                        {user?.organization?.name && (
+                            <h1 className="text-xs font-bold font-sans leading-relaxed text-black uppercase tracking-wider">
+                                {user.organization.name}
+                            </h1>
+                        )}
+                    </div>
                 </div>
 
                 <div className="border-b border-primary mx-4 mb-6"></div>

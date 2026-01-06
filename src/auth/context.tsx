@@ -21,6 +21,13 @@ export interface Permission {
     category?: string;
 }
 
+export interface Organization {
+    id: number;
+    name: string;
+    logo: string;
+    description: string;
+}
+
 interface User {
     id: string;
     name: string;
@@ -29,12 +36,13 @@ interface User {
     roleName?: string;
     workflowStepKey?: string;
     gate?: string;
+    organization?: Organization;
     permissions?: Permission[]; // For storing API permissions
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string) => void;
+    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string, organization?: Organization) => void;
     logout: () => void;
     isAuthenticated: boolean;
     checkPermission: (permissionKey: string) => boolean;
@@ -61,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return user.permissions.some(p => p.key === permissionKey);
     };
 
-    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string) => {
+    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string, organization?: Organization) => {
         // Use provided name/permissions if available (from API), otherwise default
         const newUser: User = {
             id,
@@ -70,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role,
             roleName,
             workflowStepKey,
+            organization,
             // gate: 'GATE 1',
             permissions
         };
