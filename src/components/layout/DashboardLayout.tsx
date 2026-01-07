@@ -384,7 +384,7 @@ export function DashboardLayout() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 md:ml-72 pt-20 md:pt-4 p-4 md:p-8 flex flex-col min-h-screen">
+            <main className="flex-1 md:ml-72 pt-20 md:pt-4 p-4 md:p-8 flex flex-col min-h-screen overflow-x-hidden">
                 <div className="max-w-[1600px] w-full mx-auto">
                     <Outlet />
                 </div>

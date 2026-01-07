@@ -38,7 +38,7 @@ function App() {
         <Provider store={store}>
             <AuthProvider>
                 <BrowserRouter>
-                    <div className="min-h-screen bg-background font-sans antialiased text-foreground">
+                    <div className="min-h-screen bg-background font-sans antialiased text-foreground overflow-x-hidden">
                         <Toaster position="top-right" richColors />
                         <Routes>
                             <Route path="/login" element={<Login />} />
