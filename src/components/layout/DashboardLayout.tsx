@@ -6,7 +6,7 @@ import { LogOut, User, LayoutDashboard, BadgeCheck, Users, Mail, FileText, Setti
 import { getFileUrl } from '@/store/services/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import emmpaLogo from '@/assests/emmpa.png';
+import emmpaLogo from '@/assests/emmpa.jpg';
 import icsLogo from '@/assests/ics.png';
 import nissLogo from '@/assests/niss.png';
 import insaLogo from '@/assests/insa.png';
@@ -46,9 +46,13 @@ export function DashboardLayout() {
             <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
                 <div className="flex items-center gap-2">
                     <img src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getLogo()} alt="Logo" className="h-8 w-auto object-contain" />
-                    {user?.organization?.name && (
+                    {user?.organization?.name ? (
                         <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
                             {user.organization.name}
+                        </h1>
+                    ) : (
+                        <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
+                            SUPERADMIN
                         </h1>
                     )}
                 </div>
