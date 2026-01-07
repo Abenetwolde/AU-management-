@@ -55,11 +55,11 @@ export function JournalistList() {
         if (!app.approvals || !Array.isArray(app.approvals)) {
             return 'PENDING'; // Fallback status
         }
-        
-        const approval = app.approvals.find((a: any) => 
+
+        const approval = app.approvals.find((a: any) =>
             a.workflowStep && a.workflowStep.key === key
         );
-        
+
         return approval?.status || 'PENDING';
     };
 
@@ -73,10 +73,10 @@ export function JournalistList() {
                 { key: 'drone', name: 'Drone Clearance', displayOrder: 20 }
             ];
         }
-        
+
         // Collect unique workflow steps from all applications
         const stepMap = new Map<string, WorkflowStepInfo>();
-        
+
         apiData.applications.forEach((app: any) => {
             if (app.approvals && Array.isArray(app.approvals)) {
                 app.approvals.forEach((approval: any) => {
@@ -96,7 +96,7 @@ export function JournalistList() {
                 });
             }
         });
-        
+
         // Convert to array and sort by displayOrder
         const steps = Array.from(stepMap.values());
         return steps.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
@@ -234,30 +234,30 @@ export function JournalistList() {
             </Card>
 
             {/* Table */}
-            <Card className="border-0 shadow-sm overflow-hidden bg-white">
-                <div className="relative w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+            <Card className="border-0 shadow-sm overflow-hidden bg-white flex flex-col max-h-[calc(100vh-16rem)]">
+                <div className="relative w-full overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 flex-1">
                     <table className="w-full caption-bottom text-sm min-w-[800px]">
-                        <thead className="[&_tr]:border-b bg-gray-50/50">
+                        <thead className="sticky top-0 z-10 [&_tr]:border-b bg-gray-50 shadow-sm">
                             <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">No</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">JOURNALIST</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden sm:table-cell">COUNTRY</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">PASSPORT NO</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden md:table-cell">SUBMISSION DATE</th>
-                                
+
                                 {/* EMA Status - Using application.status */}
                                 <th className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">EMA STATUS</th>
-                                
+
                                 {/* Dynamic workflow step columns using workflowStep.name */}
                                 {workflowStepInfo.map((step) => (
-                                    <th 
+                                    <th
                                         key={step.key}
                                         className="h-12 px-4 text-center align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden xl:table-cell"
                                     >
                                         {step.name.toUpperCase()}
                                     </th>
                                 ))}
-                                
+
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">ACTION</th>
                             </tr>
                         </thead>
@@ -291,7 +291,7 @@ export function JournalistList() {
                                         <td className="p-4 align-middle font-bold text-gray-600 hidden md:table-cell">
                                             <span className="text-blue-400 mr-2">📅</span> {submissionDate}
                                         </td>
-                                        
+
                                         {/* EMA Status */}
                                         <td className="p-4 align-middle text-center">
                                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${getStatusColor(emaStatus)} border`}>
@@ -299,13 +299,13 @@ export function JournalistList() {
                                                 {emaStatus}
                                             </span>
                                         </td>
-                                        
+
                                         {/* Dynamic workflow step status columns */}
                                         {workflowStepInfo.map((step) => {
                                             const stepStatus = getApprovalStatus(app, step.key);
                                             return (
-                                                <td 
-                                                    key={step.key} 
+                                                <td
+                                                    key={step.key}
                                                     className="p-4 align-middle text-center hidden xl:table-cell"
                                                 >
                                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${getStatusColor(stepStatus)} border`}>
@@ -315,7 +315,7 @@ export function JournalistList() {
                                                 </td>
                                             );
                                         })}
-                                        
+
                                         <td className="p-4 align-middle">
                                             {checkPermission('application:view:by-id') && (
                                                 <Button variant="outline" size="sm" className="hidden lg:flex h-8 text-blue-500 border-blue-200 hover:bg-blue-50 hover:text-blue-700 font-bold" onClick={() => navigate(`${basePath}/journalists/${app.id}`, { state: { application: app } })}>
