@@ -240,9 +240,6 @@ const transformApiToNodes = (steps: WorkflowStep[], onEdit: (step: WorkflowStep)
 };
 
 const transformNodesToApi = (nodes: Node[], edges: Edge[], allStepsOriginal: WorkflowStep[]): BulkUpdateWorkflowStepsPayload => {
-    // 1. Identify "Start" nodes (no incoming edges) and "End" nodes (no outgoing)
-    // Actually, we process based on Edge logic and Sort order.
-
     // Sort nodes by Y position to determine "Logic Order" for calculating dependency types
     // Note: X position determines precedence in parallel processing if needed, but Y is flow direction.
     const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
@@ -274,9 +271,8 @@ const transformNodesToApi = (nodes: Node[], edges: Edge[], allStepsOriginal: Wor
 
         return {
             id: original?.id || 0, // 0 technically shouldn't happen for existing nodes
-            // Y position determines visual layer (order). We use increments of 10.
-            // Nodes on similar Y (+/- 20px) share same order.
-            displayOrder: Math.floor(node.position.y / 100) * 10 || 10,
+            // Preserve the displayOrder from node data - allow manual positioning
+            displayOrder: (node.data.displayOrder as number) || 10,
             dependsOn: dependsOn,
             dependencyType: dependencyType,
             emailStep: node.data.emailStep as boolean
