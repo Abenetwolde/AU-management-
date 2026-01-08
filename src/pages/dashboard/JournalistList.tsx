@@ -28,7 +28,7 @@ export function JournalistList() {
 
     // Use workflow API for non-super-admin users
     const { data: workflowData, isLoading: isWorkflowLoading, isError: isWorkflowError } = useGetWorkflowApplicationsQuery(
-        { page: 1, limit: 50, search: searchTerm },
+        { page: 1, limit: 50, search: searchTerm, nationality: selectedCountry },
         { skip: isSuperAdmin } // Skip this query if user is super admin
     );
 
@@ -108,23 +108,24 @@ export function JournalistList() {
     const applications = apiData?.applications || [];
     const displayData = applications.length > 0 ? applications : [];
 
-    // Filter Logic
+    // Filter Logic (Frontend filter as fallback or for super admin)
     const filteredData = displayData.filter((app: any) => {
         const fullName = app.formData?.first_name
             ? `${app.formData.first_name} ${app.formData.last_name || ''}`
             : app.user?.fullName || 'Unknown';
 
         const passport = app.formData?.passport_number || '';
-        const country = app.formData?.country || '';
+        const country = app.formData?.country || app.formData?.nationality || '';
         const countryNameVal = countryName(country);
 
         const matchesSearch = fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             passport.toLowerCase().includes(searchTerm.toLowerCase());
 
         // Check if selectedCountry matches either the code or the resolved name
-        const matchesCountry = selectedCountry
+        // (Only needed if we are not filtering on the API side, but kept for consistency)
+        const matchesCountry = isSuperAdmin ? (selectedCountry
             ? (country === selectedCountry || countryNameVal === selectedCountry || country === countryName(selectedCountry))
-            : true;
+            : true) : true; // API already filtered for non-super-admin
 
         return matchesSearch && matchesCountry;
     });
@@ -218,11 +219,11 @@ export function JournalistList() {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-500">Country</label>
+                                <label className="text-sm font-medium text-gray-500">Nationality</label>
                                 <CountrySelect
                                     value={selectedCountry}
                                     onChange={setSelectedCountry}
-                                    placeholder="All countries"
+                                    placeholder="All Nationalities"
                                 />
                             </div>
                         </div>
@@ -241,7 +242,7 @@ export function JournalistList() {
                             <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">No</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">JOURNALIST</th>
-                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden sm:table-cell">COUNTRY</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden sm:table-cell">NATIONALITY</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider">PASSPORT NO</th>
                                 <th className="h-12 px-4 text-left align-middle font-medium text-gray-500 uppercase text-xs tracking-wider hidden md:table-cell">SUBMISSION DATE</th>
 
@@ -268,7 +269,7 @@ export function JournalistList() {
                                     ? `${app.formData.first_name} ${app.formData.last_name || ''}`
                                     : app.user?.fullName || 'Unknown';
                                 const occupation = app.formData?.occupation || 'Journalist';
-                                const country = app.formData?.country || '';
+                                const country = app.formData?.country || app.formData?.nationality || '';
                                 const passport = app.formData?.passport_number || 'N/A';
                                 const submissionDate = app.createdAt ? new Date(app.createdAt).toLocaleDateString('en-GB') : 'N/A';
 

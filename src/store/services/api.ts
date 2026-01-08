@@ -1075,12 +1075,13 @@ export const api = createApi({
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
         }),
-        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string } | void>({
+        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string; nationality?: string } | void>({
             query: (params) => {
                 const page = params && 'page' in params ? params.page : 1;
                 const limit = params && 'limit' in params ? params.limit : 10;
                 const search = params && 'search' in params ? params.search : '';
-                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}`;
+                const nationality = params && 'nationality' in params ? params.nationality : '';
+                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}&nationality=${nationality}`;
             },
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
