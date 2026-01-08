@@ -21,6 +21,7 @@ import { InvitationCenter } from './pages/dashboard/invitations/InvitationCenter
 import { BadgeCenter } from './pages/dashboard/badges/BadgeCenter';
 import ApiManagement from './pages/dashboard/ApiManagement';
 import { PublicProfile } from './pages/public/PublicProfile';
+import { JournalistVerification } from './pages/public/JournalistVerification';
 import { Toaster } from 'sonner';
 
 import { useEffect } from 'react';
@@ -43,6 +44,7 @@ function App() {
                         <Routes>
                             <Route path="/login" element={<Login />} />
                             <Route path="/badge-profile/:hash" element={<PublicProfile />} />
+                            <Route path="/verification/:id" element={<JournalistVerification />} />
 
                             {/* Main Unified Dashboard Route */}
                             <Route element={<ProtectedRoute allowedRoles={Object.values(UserRole)} />}>

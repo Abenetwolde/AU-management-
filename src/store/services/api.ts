@@ -1458,6 +1458,10 @@ export const api = createApi({
             query: (hash) => `/badges/profile/${hash}`,
             transformResponse: (response: any) => response.data || response,
         }),
+        getPublicBadgeProfileByAppId: builder.query<any, number | string>({
+            query: (applicationId) => `/badges/public/application/${applicationId}`,
+            transformResponse: (response: any) => response.data || response,
+        }),
         bulkGenerateBadges: builder.mutation<Blob, { applicationIds: number[]; configId?: number }>({
             query: (body) => ({
                 url: '/badges/bulk',
@@ -1572,6 +1576,7 @@ export const {
     useUpdateBadgeConfigMutation,
     useDeleteBadgeConfigMutation,
     useGetBadgeProfileByHashQuery,
+    useGetPublicBadgeProfileByAppIdQuery,
     useBulkGenerateBadgesMutation,
     // Dashboard Hooks
     useGetDashboardFormsQuery,
