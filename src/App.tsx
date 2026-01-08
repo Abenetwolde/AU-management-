@@ -29,6 +29,7 @@ import { initEmailJS } from './lib/emailService';
 import DashboardIndex from './pages/dashboard/DashboardIndex';
 import { OrganizationManagement } from './pages/dashboard/OrganizationManagement';
 import { WorkflowBuilder } from './pages/dashboard/WorkflowBuilder';
+import EmbassyManagement from './pages/dashboard/EmbassyManagement';
 
 function App() {
     useEffect(() => {
@@ -74,6 +75,7 @@ function App() {
                                     <Route path="roles" element={<RoleManagement />} />
                                     <Route path="badge-center" element={<BadgeCenter />} />
                                     <Route path="api-management" element={<ApiManagement />} />
+                                    <Route path="embassies" element={<EmbassyManagement />} />
 
                                     {/* AU Admin Specific */}
                                     <Route path="badge-management" element={<BadgeManagement />} />

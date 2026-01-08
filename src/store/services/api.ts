@@ -126,6 +126,21 @@ export interface Organization {
     updatedAt: string;
 }
 
+export interface Country {
+    id: number;
+    code: string;
+    name: string;
+}
+
+export interface Embassy {
+    id: number;
+    name: string;
+    address?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    overseeingCountries: Country[];
+}
+
 export interface User {
     id: number;
     fullName: string;
@@ -849,7 +864,7 @@ export const api = createApi({
             return headers;
         },
     }),
-    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow', 'Badge', 'Invitation'],
+    tagTypes: ['Role', 'Permission', 'Application', 'Form', 'User', 'Category', 'WorkflowStep', 'Invitation', 'Badge', 'EquipCatalog', 'Integration', 'APIProvider', 'Embassy', 'Country', 'Organization', 'EmailTemplate', 'LandingPage', 'Workflow'],
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, any>({
             query: (credentials: any) => ({
@@ -1045,10 +1060,45 @@ export const api = createApi({
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
         }),
-        getApplicationById: builder.query<Application, string>({
+        getApplicationById: builder.query<Application, number>({
             query: (id) => `/applications/${id}`,
             transformResponse: (response: any) => response.data || response,
-            providesTags: (result, error, id) => [{ type: 'Application', id }],
+            providesTags: (_result, _error, id) => [{ type: 'Application', id }],
+        }),
+
+        // --- Embassy Management ---
+        getEmbassies: builder.query<Embassy[], void>({
+            query: () => '/embassies',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Embassy'],
+        }),
+        getCountries: builder.query<Country[], void>({
+            query: () => '/embassies/countries',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Country'],
+        }),
+        createEmbassy: builder.mutation<Embassy, Partial<Embassy> & { countryIds?: number[] }>({
+            query: (body) => ({
+                url: '/embassies',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Embassy'],
+        }),
+        updateEmbassy: builder.mutation<Embassy, { id: number; data: Partial<Embassy> & { countryIds?: number[] } }>({
+            query: ({ id, data }) => ({
+                url: `/embassies/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Embassy'],
+        }),
+        deleteEmbassy: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/embassies/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Embassy'],
         }),
         updateApplicationStatus: builder.mutation<void, { applicationId: number, status: string }>({
             query: (body) => ({
@@ -1515,6 +1565,11 @@ export const {
     useDeletePermissionMutation,
     useGetApplicationsQuery,
     useGetApplicationByIdQuery,
+    useGetEmbassiesQuery,
+    useGetCountriesQuery,
+    useCreateEmbassyMutation,
+    useUpdateEmbassyMutation,
+    useDeleteEmbassyMutation,
     useUpdateApplicationStatusMutation,
     useApproveWorkflowStepMutation,
     useGetApprovedApplicationsQuery,
