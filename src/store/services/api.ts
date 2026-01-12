@@ -137,6 +137,9 @@ export interface User {
     updatedAt: string;
     role?: Role;
     roleName?: string;
+    permissions?: string[];
+    workflowStepKey?: string;
+    country?: string;
 }
 
 export interface FormFieldTemplate {
@@ -472,6 +475,7 @@ export interface LoginResponse {
             roleId: number;
             roleName: string;
             permissions: Permission[];
+            workflowStepKey?: string;
         };
         token: string;
     };
@@ -1428,7 +1432,7 @@ export const api = createApi({
         getBadgeConfigById: builder.query<BadgeConfig, number>({
             query: (id) => `/badges/configs/${id}`,
             transformResponse: (response: any) => response.data || response,
-            providesTags: (result, error, id) => [{ type: 'Badge', id }],
+            providesTags: (_result, _error, id) => [{ type: 'Badge', id }],
         }),
         createBadgeConfig: builder.mutation<BadgeConfig, CreateBadgeConfigPayload>({
             query: (payload) => ({

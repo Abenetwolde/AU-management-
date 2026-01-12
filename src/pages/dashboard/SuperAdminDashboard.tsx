@@ -763,7 +763,7 @@ export default function SuperAdminDashboard() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                  {stakeholders.map((org: { name: string; applicationsCount: number }, i: number) => (
+                  {stakeholders.map((org: any, i: number) => (
                     <div key={i} className="flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">
@@ -775,7 +775,7 @@ export default function SuperAdminDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-blue-600">{org.applicationsCount}</p>
+                        <p className="text-sm font-bold text-blue-600">{org.value || org.applicationsCount}</p>
                         <p className="text-[10px] text-slate-400 font-medium">Apps</p>
                       </div>
                     </div>

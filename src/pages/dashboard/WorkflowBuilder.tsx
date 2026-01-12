@@ -68,7 +68,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 // --- Custom Components ---
 
-const StepNode = ({ data, selected }: NodeProps) => {
+// Define specific data type for Node
+interface StepNodeData extends Record<string, unknown> {
+    label: string;
+    key: string;
+    dependencyType: string;
+    dependsOn?: string[];
+    requiredRole: string;
+    isActive?: boolean;
+    displayOrder?: number;
+    description?: string;
+    color?: string;
+    formId?: number | null;
+    emailStep?: boolean;
+    onEdit?: () => void;
+}
+
+const StepNode = ({ data: rawData, selected }: NodeProps) => {
+    const data = rawData as StepNodeData;
     const getDependencyTypeColor = (type: string) => {
         switch (type) {
             case 'ALL': return 'border-l-blue-600 bg-blue-50/50';
@@ -125,7 +142,7 @@ const StepNode = ({ data, selected }: NodeProps) => {
                         </Badge>
                     )}
                 </div>
-                {data.formId && <Badge className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">Form</Badge>}
+                {!!data.formId && <Badge className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">Form</Badge>}
             </div>
 
             <Handle type="source" position={Position.Bottom} className="!w-4 !h-2 !rounded-sm !bg-slate-400 !-bottom-1.5 transition-colors hover:!bg-blue-500" />
