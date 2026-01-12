@@ -76,7 +76,7 @@ export function JournalistVerification() {
                                 <BadgeCheck className="h-6 w-6 text-white" />
                             </div>
                             <span className="text-white font-black uppercase tracking-widest text-sm">
-                                VERIFIED OFFICIAL
+                                VERIFIED MEDIA
                             </span>
                         </div>
                         <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
