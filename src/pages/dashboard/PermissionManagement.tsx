@@ -299,7 +299,7 @@ export function PermissionManagement() {
     }
 
     return (
-        <div className="space-y-6 w-full p-6 flex flex-col w-[70%] h-[40%] " >
+        <div className="space-y-6 w-full max-w-full p-6 flex flex-col h-screen" >
             <div className="flex justify-between items-center shrink-0">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Access Control Matrix</h1>
@@ -365,7 +365,7 @@ export function PermissionManagement() {
                 </div>
             </div>
 
-            <Card className="flex-1 flex flex-col ">
+            <Card className="flex-1 flex flex-col overflow-hidden max-w-full">
                 <CardHeader className="py-4 border-b bg-gray-50/50 shrink-0">
                     <div className="flex justify-between items-center gap-4">
                         <div className="flex items-center gap-4">
@@ -398,14 +398,14 @@ export function PermissionManagement() {
                     </div>
                 </CardHeader>
 
-                <CardContent className="p-0 overflow-x-auto">
-                    <div className="min-w-max">
+                <CardContent className="p-0 overflow-y-auto overflow-x-auto flex-1 max-w-full">
+                    <div className="min-w-max relative">
                         {/* Sticky Header */}
-                        <div className="sticky top-0 z-10 bg-white border-b shadow-sm grid grid-cols-[300px_1fr_60px]">
-                            <div className="p-4 font-bold text-sm bg-gray-50 border-r flex items-center">
+                        <div className="sticky top-0 z-20 bg-white border-b shadow-sm grid grid-cols-[300px_1fr_60px]">
+                            <div className="sticky left-0 z-30 p-4 font-bold text-sm bg-gray-50 border-r flex items-center">
                                 Resource / Action
                             </div>
-                            <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, minmax(120px, 1fr))` }}>
+                            <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, 150px)` }}>
                                 {visibleRoles.map(role => (
                                     <div key={role.id} className="p-4 font-bold text-sm text-center border-r last:border-r-0 bg-gray-50 flex flex-col items-center justify-center gap-1">
                                         <Badge variant="outline" className="bg-white whitespace-nowrap">{role.name}</Badge>
@@ -413,7 +413,7 @@ export function PermissionManagement() {
                                     </div>
                                 ))}
                             </div>
-                            <div className="p-4 font-bold text-sm bg-gray-50 border-l flex items-center justify-center">
+                            <div className="sticky right-0 z-30 p-4 font-bold text-sm bg-gray-50 border-l flex items-center justify-center">
                                 Action
                             </div>
                         </div>
@@ -429,7 +429,7 @@ export function PermissionManagement() {
                                         {/* Group Header */}
                                         <div className="grid grid-cols-[300px_1fr] bg-gray-50/30 hover:bg-gray-50 transition-colors">
                                             <div
-                                                className="p-3 pl-4 flex items-center gap-2 cursor-pointer border-r group"
+                                                className="sticky left-0 z-10 p-3 pl-4 flex items-center gap-2 cursor-pointer border-r group bg-gray-50/30 hover:bg-gray-50"
                                                 onClick={() => toggleGroupCollapse(cat.name)}
                                             >
                                                 {isCollapsed ? <ChevronRight className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
@@ -438,7 +438,7 @@ export function PermissionManagement() {
                                             </div>
 
                                             {/* Group Bulk Toggles */}
-                                            <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, minmax(120px, 1fr))` }}>
+                                            <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, 150px)` }}>
                                                 {visibleRoles.map(role => {
                                                     const rolePerms = perms.map(p => p.grantedRoles.includes(role.id) ? p.id : null).filter(Boolean);
                                                     const selectedCount = rolePerms.length;
@@ -465,13 +465,13 @@ export function PermissionManagement() {
                                         {/* Rows */}
                                         {!isCollapsed && perms.map(item => (
                                             <div key={item.id} className="grid grid-cols-[300px_1fr_60px] hover:bg-slate-50 group">
-                                                <div className="p-3 pl-10 border-r flex flex-col justify-center">
+                                                <div className="sticky left-0 z-10 p-3 pl-10 border-r flex flex-col justify-center bg-white group-hover:bg-slate-50">
                                                     <div className="flex items-center gap-2">
                                                         <div className="font-medium text-sm text-gray-700 font-mono truncate" title={item.key}>{item.key}</div>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground truncate" title={item.description || ''}>{item.description || item.label}</div>
                                                 </div>
-                                                <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, minmax(120px, 1fr))` }}>
+                                                <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleRoles.length}, 150px)` }}>
                                                     {visibleRoles.map(role => {
                                                         const isChecked = item.grantedRoles.includes(role.id);
                                                         return (
@@ -486,7 +486,7 @@ export function PermissionManagement() {
                                                         );
                                                     })}
                                                 </div>
-                                                <div className="p-3 border-l flex justify-center items-center">
+                                                <div className="sticky right-0 z-10 p-3 border-l flex justify-center items-center bg-white group-hover:bg-slate-50">
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => handleDeletePermission(item.id)}>
                                                         <Trash2 className="h-4 w-4 text-red-500" />
                                                     </Button>

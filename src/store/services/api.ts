@@ -126,6 +126,21 @@ export interface Organization {
     updatedAt: string;
 }
 
+export interface Country {
+    id: number;
+    code: string;
+    name: string;
+}
+
+export interface Embassy {
+    id: number;
+    name: string;
+    address?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    overseeingCountries: Country[];
+}
+
 export interface User {
     id: number;
     fullName: string;
@@ -140,6 +155,11 @@ export interface User {
     permissions?: string[];
     workflowStepKey?: string;
     country?: string;
+    embassyId?: number;
+    embassy?: {
+        id: number;
+        name: string;
+    };
 }
 
 export interface FormFieldTemplate {
@@ -853,7 +873,7 @@ export const api = createApi({
             return headers;
         },
     }),
-    tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow', 'Badge', 'Invitation'],
+    tagTypes: ['Role', 'Permission', 'Application', 'Form', 'User', 'Category', 'WorkflowStep', 'Invitation', 'Badge', 'EquipCatalog', 'Integration', 'APIProvider', 'Embassy', 'Country', 'Organization', 'EmailTemplate', 'LandingPage', 'Workflow'],
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, any>({
             query: (credentials: any) => ({
@@ -1049,10 +1069,45 @@ export const api = createApi({
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
         }),
-        getApplicationById: builder.query<Application, string>({
+        getApplicationById: builder.query<Application, number>({
             query: (id) => `/applications/${id}`,
             transformResponse: (response: any) => response.data || response,
-            providesTags: (result, error, id) => [{ type: 'Application', id }],
+            providesTags: (_result, _error, id) => [{ type: 'Application', id }],
+        }),
+
+        // --- Embassy Management ---
+        getEmbassies: builder.query<Embassy[], void>({
+            query: () => '/embassies',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Embassy'],
+        }),
+        getCountries: builder.query<Country[], void>({
+            query: () => '/embassies/countries',
+            transformResponse: (response: any) => response.data || response,
+            providesTags: ['Country'],
+        }),
+        createEmbassy: builder.mutation<Embassy, Partial<Embassy> & { countryIds?: number[] }>({
+            query: (body) => ({
+                url: '/embassies',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Embassy'],
+        }),
+        updateEmbassy: builder.mutation<Embassy, { id: number; data: Partial<Embassy> & { countryIds?: number[] } }>({
+            query: ({ id, data }) => ({
+                url: `/embassies/${id}`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: ['Embassy'],
+        }),
+        deleteEmbassy: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/embassies/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Embassy'],
         }),
         updateApplicationStatus: builder.mutation<void, { applicationId: number, status: string }>({
             query: (body) => ({
@@ -1079,12 +1134,13 @@ export const api = createApi({
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
         }),
-        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string } | void>({
+        getWorkflowApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number; search?: string; nationality?: string } | void>({
             query: (params) => {
                 const page = params && 'page' in params ? params.page : 1;
                 const limit = params && 'limit' in params ? params.limit : 10;
                 const search = params && 'search' in params ? params.search : '';
-                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}`;
+                const nationality = params && 'nationality' in params ? params.nationality : '';
+                return `/dynamic/applications?page=${page}&limit=${limit}&search=${search}&nationality=${nationality}`;
             },
             transformResponse: (response: ApplicationsResponse) => response.data,
             providesTags: ['Application'],
@@ -1119,9 +1175,12 @@ export const api = createApi({
             invalidatesTags: ['Organization'],
         }),
         // Users
-        getUsers: builder.query<User[], void>({
-            query: () => '/users',
-            transformResponse: (response: UsersResponse) => response.data.users,
+        getUsers: builder.query<{ users: User[]; total: number; currentPage: number; totalPages: number }, { page?: number; limit?: number; search?: string; roleId?: number; status?: 'ACTIVE' | 'INACTIVE' } | void>({
+            query: (params) => ({
+                url: '/users',
+                params: params || {},
+            }),
+            transformResponse: (response: UsersResponse) => response.data,
             providesTags: ['User'],
         }),
         createUser: builder.mutation<User, Partial<User>>({
@@ -1461,6 +1520,10 @@ export const api = createApi({
             query: (hash) => `/badges/profile/${hash}`,
             transformResponse: (response: any) => response.data || response,
         }),
+        getPublicBadgeProfileByAppId: builder.query<any, number | string>({
+            query: (applicationId) => `/badges/public/application/${applicationId}`,
+            transformResponse: (response: any) => response.data || response,
+        }),
         bulkGenerateBadges: builder.mutation<Blob, { applicationIds: number[]; configId?: number }>({
             query: (body) => ({
                 url: '/badges/bulk',
@@ -1514,6 +1577,11 @@ export const {
     useDeletePermissionMutation,
     useGetApplicationsQuery,
     useGetApplicationByIdQuery,
+    useGetEmbassiesQuery,
+    useGetCountriesQuery,
+    useCreateEmbassyMutation,
+    useUpdateEmbassyMutation,
+    useDeleteEmbassyMutation,
     useUpdateApplicationStatusMutation,
     useApproveWorkflowStepMutation,
     useGetApprovedApplicationsQuery,
@@ -1575,6 +1643,7 @@ export const {
     useUpdateBadgeConfigMutation,
     useDeleteBadgeConfigMutation,
     useGetBadgeProfileByHashQuery,
+    useGetPublicBadgeProfileByAppIdQuery,
     useBulkGenerateBadgesMutation,
     // Dashboard Hooks
     useGetDashboardFormsQuery,

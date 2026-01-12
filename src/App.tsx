@@ -21,6 +21,7 @@ import { InvitationCenter } from './pages/dashboard/invitations/InvitationCenter
 import { BadgeCenter } from './pages/dashboard/badges/BadgeCenter';
 import ApiManagement from './pages/dashboard/ApiManagement';
 import { PublicProfile } from './pages/public/PublicProfile';
+import { JournalistVerification } from './pages/public/JournalistVerification';
 import { Toaster } from 'sonner';
 
 import { useEffect } from 'react';
@@ -28,6 +29,7 @@ import { initEmailJS } from './lib/emailService';
 import DashboardIndex from './pages/dashboard/DashboardIndex';
 import { OrganizationManagement } from './pages/dashboard/OrganizationManagement';
 import { WorkflowBuilder } from './pages/dashboard/WorkflowBuilder';
+import EmbassyManagement from './pages/dashboard/EmbassyManagement';
 
 function App() {
     useEffect(() => {
@@ -38,11 +40,12 @@ function App() {
         <Provider store={store}>
             <AuthProvider>
                 <BrowserRouter>
-                    <div className="min-h-screen bg-background font-sans antialiased text-foreground">
+                    <div className="min-h-screen bg-background font-sans antialiased text-foreground overflow-x-hidden">
                         <Toaster position="top-right" richColors />
                         <Routes>
                             <Route path="/login" element={<Login />} />
                             <Route path="/badge-profile/:hash" element={<PublicProfile />} />
+                            <Route path="/verification/:id" element={<JournalistVerification />} />
 
                             {/* Main Unified Dashboard Route */}
                             <Route element={<ProtectedRoute allowedRoles={Object.values(UserRole)} />}>
@@ -72,6 +75,7 @@ function App() {
                                     <Route path="roles" element={<RoleManagement />} />
                                     <Route path="badge-center" element={<BadgeCenter />} />
                                     <Route path="api-management" element={<ApiManagement />} />
+                                    <Route path="embassies" element={<EmbassyManagement />} />
 
                                     {/* AU Admin Specific */}
                                     <Route path="badge-management" element={<BadgeManagement />} />

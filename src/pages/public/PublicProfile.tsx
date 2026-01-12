@@ -48,7 +48,7 @@ export function PublicProfile() {
                 )}>
                     {isExpired ? <XCircle className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
                     <span className="text-lg font-black font-sans uppercase tracking-wider">
-                        {isExpired ? 'EXPIRED CREDENTIAL' : 'VERIFIED OFFICIAL'}
+                        {isExpired ? 'EXPIRED CREDENTIAL' : 'VERIFIED MEDIA'}
                     </span>
                 </div>
 

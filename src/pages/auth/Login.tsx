@@ -37,11 +37,12 @@ export function Login() {
                     case 'INSA_OFFICER': roleEnum = UserRole.INSA_OFFICER; break;
                     case 'CUSTOMS_OFFICER': roleEnum = UserRole.CUSTOMS_OFFICER; break;
                     case 'AU_ADMIN': roleEnum = UserRole.AU_ADMIN; break;
+                    case 'AU_OFFICER': roleEnum = UserRole.AU_OFFICER; break;
                     // Add other mappings as needed
                 }
 
                 // Call context login to set state
-                login(user.email, roleEnum, user.permissions, user.fullName, user.roleName, String(user.id), user.workflowStepKey);
+                login(user.email, roleEnum, user.permissions, user.fullName, user.roleName, String(user.id), user.workflowStepKey, user.organization);
 
                 // Always navigate to the unified dashboard
                 navigate('/dashboard/admin');
