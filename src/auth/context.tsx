@@ -38,11 +38,12 @@ interface User {
     gate?: string;
     organization?: Organization;
     permissions?: Permission[]; // For storing API permissions
+    authorizedWorkflowStepIds?: number[]; // IDs of steps this user can approve
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string, organization?: Organization) => void;
+    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string, organization?: Organization, authorizedWorkflowStepIds?: number[]) => void;
     logout: () => void;
     isAuthenticated: boolean;
     checkPermission: (permissionKey: string) => boolean;
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return user.permissions.some(p => p.key === permissionKey);
     };
 
-    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string, organization?: Organization) => {
+    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string, organization?: Organization, authorizedWorkflowStepIds: number[] = []) => {
         // Use provided name/permissions if available (from API), otherwise default
         const newUser: User = {
             id,
@@ -80,7 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             workflowStepKey,
             organization,
             // gate: 'GATE 1',
-            permissions
+            permissions,
+            authorizedWorkflowStepIds
         };
         setUser(newUser);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));

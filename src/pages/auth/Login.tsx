@@ -42,7 +42,7 @@ export function Login() {
                 }
 
                 // Call context login to set state
-                login(user.email, roleEnum, user.permissions, user.fullName, user.roleName, String(user.id), user.workflowStepKey, user.organization);
+                login(user.email, roleEnum, user.permissions, user.fullName, user.roleName, String(user.id), user.workflowStepKey, user.organization, user.authorizedWorkflowStepIds);
 
                 // Always navigate to the unified dashboard
                 navigate('/dashboard/admin');

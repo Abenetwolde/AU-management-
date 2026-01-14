@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect, DragEvent } from 'react';
+import { useCallback, useState, useRef, useEffect, DragEvent, useMemo } from 'react';
 import {
     ReactFlow,
     Controls,
@@ -81,7 +81,7 @@ interface StepNodeData extends Record<string, unknown> {
     color?: string;
     formId?: number | null;
     emailStep?: boolean;
-    targetAudience: 'ALL' | 'LOCAL' | 'INTERNATIONAL';
+    targetAudience: 'LOCAL' | 'INTERNATIONAL';
     isExitStep: boolean;
     onEdit?: () => void;
 }
@@ -211,7 +211,7 @@ const transformApiToNodes = (steps: WorkflowStep[], onEdit: (step: WorkflowStep)
 
         rowSteps.forEach((step, idx) => {
             nodes.push({
-                id: step.key,
+                id: step.id.toString(),
                 type: 'step',
                 position: { x: startX + (idx * 320), y: currentY },
                 data: {
@@ -243,13 +243,14 @@ const transformApiToNodes = (steps: WorkflowStep[], onEdit: (step: WorkflowStep)
     placedSteps.forEach(step => {
         if (step.dependsOn && step.dependsOn.length > 0) {
             step.dependsOn.forEach(depKey => {
-                // Ensure source exists on canvas
-                if (nodes.find(n => n.id === depKey)) {
-                    const edgeId = `e-${depKey}-${step.key}`;
+                // Find the source step ID by key in the current list
+                const sourceStep = placedSteps.find(s => s.key === depKey);
+                if (sourceStep) {
+                    const edgeId = `e-${sourceStep.id}-${step.id}`;
                     edges.push({
                         id: edgeId,
-                        source: depKey,
-                        target: step.key,
+                        source: sourceStep.id.toString(),
+                        target: step.id.toString(),
                         type: 'custom',
                         animated: true,
                         markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' },
@@ -269,37 +270,32 @@ const transformNodesToApi = (nodes: Node[], edges: Edge[], allStepsOriginal: Wor
     const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
 
     const steps = sortedNodes.map((node, index) => {
-        // Find incoming edges for this node
+        // Find incoming edges for this node (target === node.id)
         const incomingEdges = edges.filter(e => e.target === node.id);
-        const dependsOn = incomingEdges.map(e => e.source);
+        const dependsOnIds = incomingEdges.map(e => e.source);
 
-        // Logic Rule:
-        // First Node (Index 0 or No incoming): NONE
-        // Last Node (Index Last): ALL (Force ALL if it's the absolute last?)
-        // Middle: ANY
-
-        let dependencyType: 'ALL' | 'ANY' | 'NONE' = 'ANY';
-
-        if (index === 0 || dependsOn.length === 0) {
-            dependencyType = 'NONE';
-        } else if (index === sortedNodes.length - 1) {
-            // User Rule: "Use ALL for last step"
-            dependencyType = 'ALL';
-        } else {
-            // User Rule: "Use ANY for anything beside last and first"
-            dependencyType = 'ANY';
-        }
+        // Map source IDs back to keys for dependsOn
+        const dependsOn = dependsOnIds.map(sourceId => {
+            const sourceNode = nodes.find(n => n.id === sourceId);
+            return sourceNode?.data.key as string;
+        }).filter(Boolean);
 
         // Keep existing ID for update
-        const original = (node.data.originalStep as WorkflowStep) || allStepsOriginal.find(s => s.key === node.id);
+        const original = (node.data.originalStep as WorkflowStep) || allStepsOriginal.find(s => s.id === Number(node.id));
 
         return {
-            id: original?.id || 0, // 0 technically shouldn't happen for existing nodes
+            id: original?.id || 0,
             // Preserve the displayOrder from node data - allow manual positioning
-            displayOrder: (node.data.displayOrder as number) || 10,
+            displayOrder: (node.data.displayOrder as number) || (index + 1) * 10,
+            // Deriving from edges ensures visual consistency
             dependsOn: dependsOn,
-            dependencyType: dependencyType,
-            emailStep: node.data.emailStep as boolean
+            // Use ANY as default, but allow override from node data if it was set explicitly
+            dependencyType: (node.data.dependencyType as any) || 'ANY',
+            emailStep: node.data.emailStep as boolean,
+            // Pass through identity fields to ensure they are preserved or updated correctly
+            isExitStep: !!node.data.isExitStep,
+            targetAudience: node.data.targetAudience as any,
+            formId: node.data.formId || null
         };
     });
 
@@ -355,25 +351,26 @@ function WorkflowBuilderContent() {
     const [selectedAudience, setSelectedAudience] = useState<'LOCAL' | 'INTERNATIONAL'>('INTERNATIONAL');
     const [selectedPhase, setSelectedPhase] = useState<'ENTRY' | 'EXIT'>('ENTRY');
 
-    const filteredSteps = workflowSteps?.filter(step => {
-        // Filter by Form
-        if (selectedFormId !== null && step.formId !== null && step.formId !== selectedFormId) return false;
-        // Global steps (formId: null) are shown across all form filters
+    const filteredSteps = useMemo(() => {
+        if (!workflowSteps) return [];
+        return workflowSteps.filter(step => {
+            // Filter by Form
+            if (selectedFormId !== null && step.formId !== null && step.formId !== selectedFormId) return false;
+            // Global steps (formId: null) are shown across all form contexts
 
-        // Filter by Audience
-        if (step.targetAudience !== selectedAudience) return false;
+            // Filter by Audience
+            if (step.targetAudience !== selectedAudience) return false;
 
-        // Filter by Phase
-        const isExit = selectedPhase === 'EXIT';
-        if (step.isExitStep !== isExit) return false;
+            // Filter by Phase
+            const isExit = selectedPhase === 'EXIT';
+            if (step.isExitStep !== isExit) return false;
 
-        return true;
-    });
+            return true;
+        });
+    }, [workflowSteps, selectedFormId, selectedAudience, selectedPhase]);
 
     const handleEditClick = useCallback((step: WorkflowStep) => {
-        // If the step is on the canvas, use the latest node data (which might have unsaved changes)
-        // Otherwise use the API step data.
-        const node = nodesRef.current.find(n => n.id === step.key);
+        const node = nodesRef.current.find(n => n.id === step.id.toString());
         if (node) {
             setCurrentStep({
                 ...step,
@@ -403,14 +400,49 @@ function WorkflowBuilderContent() {
     }, [filteredSteps, setNodes, setEdges, handleEditClick]);
 
     const onConnect = useCallback(
-        (params: Connection) => setEdges((eds) => addEdge({
-            ...params,
-            type: 'custom',
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
-        }, eds)),
-        [setEdges],
+        (params: Connection) => {
+            setEdges((eds) => addEdge({
+                ...params,
+                type: 'custom',
+                animated: true,
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
+            }, eds));
+
+            // Auto-set target node's dependencyType to ANY if it was NONE
+            setNodes((nds) => nds.map(n => {
+                if (n.id === params.target && (n.data.dependencyType === 'NONE' || !n.data.dependencyType)) {
+                    return { ...n, data: { ...n.data, dependencyType: 'ANY' } };
+                }
+                return n;
+            }));
+        },
+        [setEdges, setNodes],
     );
+
+    const onNodeDragStop = useCallback(() => {
+        setNodes((nds) => {
+            const sorted = [...nds].sort((a, b) => a.position.y - b.position.y);
+            const rows: Node[][] = [];
+            if (sorted.length > 0) {
+                let currentRow: Node[] = [sorted[0]];
+                rows.push(currentRow);
+                for (let i = 1; i < sorted.length; i++) {
+                    const lastY = currentRow[currentRow.length - 1].position.y;
+                    if (sorted[i].position.y - lastY < 60) {
+                        currentRow.push(sorted[i]);
+                    } else {
+                        currentRow = [sorted[i]];
+                        rows.push(currentRow);
+                    }
+                }
+            }
+            return nds.map((n) => {
+                const rowIndex = rows.findIndex((row) => row.some((rn) => rn.id === n.id));
+                const newOrder = (rowIndex + 1) * 10;
+                return { ...n, data: { ...n.data, displayOrder: newOrder } };
+            });
+        });
+    }, [setNodes]);
 
     const onDragStart = (event: DragEvent, step: WorkflowStep) => {
         event.dataTransfer.setData('application/reactflow', JSON.stringify(step));
@@ -434,17 +466,21 @@ function WorkflowBuilderContent() {
             // Removing from sidebar logic is handled by "displayOrder changes" -> refresh/refetch
             // But immediate UI update:
             const newNode: Node = {
-                id: step.key,
+                id: step.id.toString(),
                 type: 'step',
                 position,
                 data: {
                     label: step.name,
                     key: step.key,
-                    dependencyType: step.dependencyType,
+                    dependencyType: step.dependencyType || 'ANY',
                     dependsOn: step.dependsOn,
                     requiredRole: step.requiredRole,
                     isActive: step.isActive,
-                    displayOrder: 100, // Temp value, will be calculated on save
+                    displayOrder: ((workflowSteps || []).filter(s =>
+                        s.formId === (step.formId || null) &&
+                        s.targetAudience === (step.targetAudience || 'INTERNATIONAL') &&
+                        s.isExitStep === (step.isExitStep || false)
+                    ).reduce((max, s) => Math.max(max, s.displayOrder), 0) || 0) + 10,
                     description: step.description,
                     color: step.color,
                     formId: step.formId,
@@ -453,10 +489,32 @@ function WorkflowBuilderContent() {
                 },
             };
 
-            setNodes((nds) => nds.concat(newNode));
+            setNodes((nds) => {
+                const updated = nds.concat(newNode);
+                const sorted = [...updated].sort((a, b) => a.position.y - b.position.y);
+                const rows: Node[][] = [];
+                if (sorted.length > 0) {
+                    let currentRow: Node[] = [sorted[0]];
+                    rows.push(currentRow);
+                    for (let i = 1; i < sorted.length; i++) {
+                        const lastY = currentRow[currentRow.length - 1].position.y;
+                        if (sorted[i].position.y - lastY < 60) {
+                            currentRow.push(sorted[i]);
+                        } else {
+                            currentRow = [sorted[i]];
+                            rows.push(currentRow);
+                        }
+                    }
+                }
+                return updated.map((n) => {
+                    const rowIndex = rows.findIndex((row) => row.some((rn) => rn.id === n.id));
+                    const newOrder = (rowIndex + 1) * 10;
+                    return { ...n, data: { ...n.data, displayOrder: newOrder } };
+                });
+            });
             toast.success(`Placed ${step.name}. Link it to other steps.`);
         },
-        [screenToFlowPosition, handleEditClick, setNodes]
+        [screenToFlowPosition, handleEditClick, setNodes, workflowSteps]
     );
 
     const handleCreate = async () => {
@@ -465,16 +523,21 @@ function WorkflowBuilderContent() {
                 name: currentStep.name!,
                 key: currentStep.key!,
                 description: currentStep.description || '',
-                displayOrder: 0, // Unplaced -> Sidebar
                 requiredRole: currentStep.requiredRole!,
                 formId: currentStep.formId || null,
                 icon: '',
                 color: currentStep.color || '#3b82f6',
-                dependencyType: 'NONE', // Default
+                dependencyType: 'ANY', // Changed from NONE as per user request
                 dependsOn: [],
                 emailStep: currentStep.emailStep,
-                targetAudience: currentStep.targetAudience || 'ALL',
-                isExitStep: currentStep.isExitStep || false
+                targetAudience: currentStep.targetAudience as any || 'INTERNATIONAL',
+                isExitStep: currentStep.isExitStep || false,
+                // Automatically assign next order within this context to make it appear on canvas
+                displayOrder: ((workflowSteps || []).filter(s =>
+                    s.formId === (currentStep.formId || null) &&
+                    s.targetAudience === (currentStep.targetAudience || 'INTERNATIONAL') &&
+                    s.isExitStep === (currentStep.isExitStep || false)
+                ).reduce((max, s) => Math.max(max, s.displayOrder), 0) || 0) + 10
             }).unwrap();
 
             toast.success("Step created in Sidebar");
@@ -491,7 +554,7 @@ function WorkflowBuilderContent() {
         try {
             // 1. Update Node Data
             setNodes((nds) => nds.map((n) => {
-                if (n.id === currentStep.key) {
+                if (n.id === currentStep.id?.toString()) {
                     return { ...n, data: { ...n.data, ...currentStep, label: currentStep.name } };
                 }
                 return n;
@@ -501,16 +564,22 @@ function WorkflowBuilderContent() {
             if (currentStep.dependsOn) {
                 setEdges(eds => {
                     // Remove existing incoming edges for this node
-                    const otherEdges = eds.filter(e => e.target !== currentStep.key);
+                    const otherEdges = eds.filter(e => e.target !== currentStep.id?.toString());
                     // Add new edges for each dependency
-                    const newEdges = currentStep.dependsOn!.map(depKey => ({
-                        id: `e-${depKey}-${currentStep.key}`,
-                        source: depKey,
-                        target: currentStep.key!,
-                        type: 'custom',
-                        animated: true,
-                        markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
-                    }));
+                    const newEdges = currentStep.dependsOn!.map(depKey => {
+                        // Find the source node ID for this dependency key
+                        const sourceNode = nodes.find(n => n.data.key === depKey);
+                        if (!sourceNode) return null;
+
+                        return {
+                            id: `e-${sourceNode.id}-${currentStep.id}`,
+                            source: sourceNode.id,
+                            target: currentStep.id!.toString(),
+                            type: 'custom',
+                            animated: true,
+                            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
+                        };
+                    }).filter(Boolean) as Edge[];
                     return [...otherEdges, ...newEdges];
                 });
             }
@@ -561,11 +630,23 @@ function WorkflowBuilderContent() {
 
             // To be safe, merge graphed steps with sidebar steps (preserved as displayOrder 0)
             const graphStepIds = new Set(payload.steps.map(s => s.id));
-            const unplacedSteps = workflowSteps.filter(s => !graphStepIds.has(s.id)).map(s => ({
+            const isExit = selectedPhase === 'EXIT';
+
+            // CRITICAL FIX: Only reset steps that belong to the SAME Form, Audience, and Phase 
+            // but are not on the canvas. This prevents Entry workflow saving from resetting Exit steps.
+            const unplacedSteps = workflowSteps.filter(s =>
+                !graphStepIds.has(s.id) &&
+                s.formId === selectedFormId &&
+                s.targetAudience === selectedAudience &&
+                s.isExitStep === isExit
+            ).map(s => ({
                 id: s.id,
                 displayOrder: 0,
                 dependsOn: [],
-                dependencyType: 'NONE' as const
+                dependencyType: 'NONE' as const,
+                isExitStep: s.isExitStep,
+                targetAudience: s.targetAudience,
+                formId: s.formId
             }));
 
             const fullPayload = { steps: [...payload.steps, ...unplacedSteps] };
@@ -646,14 +727,14 @@ function WorkflowBuilderContent() {
                 <div className={cn("bg-white border-r flex flex-col transition-all duration-300 relative z-10", isSidebarOpen ? "w-80" : "w-0 overflow-hidden")}>
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50/50">
                         <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">Unplaced Steps</span>
-                        <Button size="sm" onClick={() => { setCurrentStep({ color: '#3b82f6', isActive: true, targetAudience: 'ALL', isExitStep: selectedPhase === 'EXIT' }); setIsCreateOpen(true); }} className="h-7 text-xs">
+                        <Button size="sm" onClick={() => { setCurrentStep({ color: '#3b82f6', isActive: true, targetAudience: 'INTERNATIONAL', formId: selectedFormId, isExitStep: selectedPhase === 'EXIT' }); setIsCreateOpen(true); }} className="h-7 text-xs">
                             <Plus className="mr-1 h-3 w-3" /> New
                         </Button>
                     </div>
                     <ScrollArea className="p-3 bg-slate-50/30 h-[400px] ">
                         <div className="space-y-2 ">
-                            {filteredSteps?.map(step => {
-                                const isPlaced = nodes.some(n => n.id === step.key);
+                            {filteredSteps?.map((step: WorkflowStep) => {
+                                const isPlaced = nodes.some(n => n.id === step.id.toString());
                                 return (
                                     <div
                                         key={step.id}
@@ -701,6 +782,7 @@ function WorkflowBuilderContent() {
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        onNodeDragStop={onNodeDragStop}
                         onDragOver={onDragOver}
                         onDrop={onDrop}
                         nodeTypes={nodeTypes}
@@ -731,6 +813,7 @@ function WorkflowBuilderContent() {
                             <TableRow className="bg-slate-50">
                                 <TableHead className="w-[80px]">Order</TableHead>
                                 <TableHead>Step Name</TableHead>
+                                <TableHead>Form Scope</TableHead>
                                 <TableHead>Role</TableHead>
                                 <TableHead>Audience</TableHead>
                                 <TableHead>Phase</TableHead>
@@ -742,14 +825,20 @@ function WorkflowBuilderContent() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredSteps?.map(step => {
-                                const isPlaced = nodes.some(n => n.id === step.key);
-                                const currentNode = nodes.find(n => n.id === step.key);
+                            {filteredSteps?.map((step: WorkflowStep) => {
+                                const stepIdStr = step.id.toString();
+                                const isPlaced = nodes.some(n => n.id === stepIdStr);
+                                const currentNode = nodes.find(n => n.id === stepIdStr);
 
                                 // Get current state from node if placed, otherwise from API
                                 const displayOrder = currentNode ? (currentNode.data.displayOrder as number) : step.displayOrder;
-                                const depType = currentNode ? (currentNode.data.dependencyType as string) : step.dependencyType;
-                                const dependsOn = currentNode ? (currentNode.data.dependsOn as string[]) : step.dependsOn;
+                                const depType = (currentNode ? (currentNode.data.dependencyType as string) : step.dependencyType) || 'ANY';
+                                const dependsOn = isPlaced
+                                    ? edges.filter(e => e.target === stepIdStr).map(e => {
+                                        const src = nodes.find(n => n.id === e.source);
+                                        return src?.data.key as string;
+                                    }).filter(Boolean)
+                                    : step.dependsOn;
                                 const emailStep = currentNode ? (currentNode.data.emailStep as boolean) : (step as any).emailStep;
 
                                 const updateNodeData = (newData: any) => {
@@ -763,7 +852,7 @@ function WorkflowBuilderContent() {
                                             // If setting this to true, unset others with same formId
                                             const currentFormId = step.formId;
                                             // If we are looking at a different node
-                                            if (n.id !== step.key) {
+                                            if (n.id !== stepIdStr) {
                                                 // Check if it shares scope (same formId or both global)
                                                 const nodeFormId = n.data.formId;
                                                 if (nodeFormId === currentFormId) {
@@ -772,7 +861,7 @@ function WorkflowBuilderContent() {
                                             }
                                         }
 
-                                        if (n.id === step.key) {
+                                        if (n.id === stepIdStr) {
                                             return { ...n, data: { ...n.data, ...newData } };
                                         }
                                         return n;
@@ -792,6 +881,11 @@ function WorkflowBuilderContent() {
                                         <TableCell>
                                             <div className="font-medium text-sm">{step.name}</div>
                                             <div className="text-[10px] text-muted-foreground font-mono">{step.key}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="text-[10px] font-normal bg-slate-100/80">
+                                                {step.formId ? forms?.find(f => f.form_id === step.formId)?.name : 'Global'}
+                                            </Badge>
                                         </TableCell>
                                         <TableCell><Badge variant="outline" className="text-[10px]">{step.requiredRole}</Badge></TableCell>
                                         <TableCell>
@@ -821,14 +915,18 @@ function WorkflowBuilderContent() {
                                             <div className="flex flex-col gap-1.5">
                                                 <div className="flex flex-wrap gap-1 min-h-[24px]">
                                                     {dependsOn && dependsOn.length > 0 ? (
-                                                        dependsOn.map(d => (
+                                                        dependsOn.map((d: string) => (
                                                             <Badge key={d} variant="secondary" className="bg-slate-100 text-[9px] flex items-center gap-1 h-5">
                                                                 {d}
                                                                 <button
                                                                     onClick={() => {
-                                                                        const newDeps = dependsOn.filter(k => k !== d);
+                                                                        const newDeps = dependsOn.filter((k: string) => k !== d);
                                                                         updateNodeData({ dependsOn: newDeps });
-                                                                        setEdges(eds => eds.filter(e => !(e.source === d && e.target === step.key)));
+                                                                        // Remove Edge: source is the dependency key's node.id, target is current step's id
+                                                                        const sourceNode = nodes.find(n => n.data.key === d);
+                                                                        if (sourceNode) {
+                                                                            setEdges(eds => eds.filter(e => !(e.source === sourceNode.id && e.target === stepIdStr)));
+                                                                        }
                                                                     }}
                                                                     className="hover:text-destructive"
                                                                 >
@@ -846,16 +944,23 @@ function WorkflowBuilderContent() {
                                                     }
                                                     if (!dependsOn.includes(v)) {
                                                         const newDeps = [...dependsOn, v];
-                                                        updateNodeData({ dependsOn: newDeps });
-                                                        // Add Edge
-                                                        setEdges(eds => addEdge({
-                                                            id: `e-${v}-${step.key}`,
-                                                            source: v,
-                                                            target: step.key,
-                                                            type: 'custom',
-                                                            animated: true,
-                                                            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
-                                                        }, eds));
+                                                        const updates: any = { dependsOn: newDeps };
+                                                        if (depType === 'NONE' || !depType) {
+                                                            updates.dependencyType = 'ANY';
+                                                        }
+                                                        updateNodeData(updates);
+                                                        // Add Edge: source is 'v' (key) which we map to source node id, target is stepIdStr
+                                                        const sourceNode = nodes.find(n => n.data.key === v);
+                                                        if (sourceNode) {
+                                                            setEdges(eds => addEdge({
+                                                                id: `e-${sourceNode.id}-${stepIdStr}`,
+                                                                source: sourceNode.id,
+                                                                target: stepIdStr,
+                                                                type: 'custom',
+                                                                animated: true,
+                                                                markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' }
+                                                            }, eds));
+                                                        }
                                                     }
                                                 }}>
                                                     <SelectTrigger className="h-7 text-[10px] w-full max-w-[150px]">
@@ -863,8 +968,13 @@ function WorkflowBuilderContent() {
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="none">Select dependency...</SelectItem>
-                                                        {workflowSteps?.filter(s => s.key !== step.key).map(s => (
-                                                            <SelectItem key={s.key} value={s.key} className="text-[10px]">{s.name}</SelectItem>
+                                                        {workflowSteps?.filter(s =>
+                                                            s.id !== step.id &&
+                                                            s.formId === step.formId &&
+                                                            s.targetAudience === step.targetAudience &&
+                                                            s.isExitStep === step.isExitStep
+                                                        ).map(s => (
+                                                            <SelectItem key={s.id} value={s.key} className="text-[10px]">{s.name}</SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
@@ -908,6 +1018,17 @@ function WorkflowBuilderContent() {
                                 <Label>Key *</Label>
                                 <Input value={currentStep.key || ''} onChange={e => setCurrentStep({ ...currentStep, key: e.target.value })} />
                             </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Scoped Form (Optional)</Label>
+                            <Select value={currentStep.formId?.toString() || 'null'} onValueChange={v => setCurrentStep({ ...currentStep, formId: v === 'null' ? null : Number(v) })}>
+                                <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select Form" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="null">Global (All Forms)</SelectItem>
+                                    {forms?.map(f => <SelectItem key={f.form_id} value={f.form_id.toString()}>{f.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-[10px] text-slate-400">If Global, this step appears across all different portal forms.</p>
                         </div>
                         <div className="space-y-2">
                             <Label>Role *</Label>
@@ -995,6 +1116,16 @@ function WorkflowBuilderContent() {
                             <Label>Description</Label>
                             <Textarea value={currentStep.description || ''} onChange={e => setCurrentStep({ ...currentStep, description: e.target.value })} />
                         </div>
+                        <div className="space-y-2">
+                            <Label>Scoped Form (Optional)</Label>
+                            <Select value={currentStep.formId?.toString() || "null"} onValueChange={v => setCurrentStep({ ...currentStep, formId: v === "null" ? null : Number(v) })}>
+                                <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Global" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="null">Global (All Forms)</SelectItem>
+                                    {forms?.map(f => <SelectItem key={f.form_id} value={f.form_id.toString()}>{f.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Role</Label>
@@ -1015,8 +1146,8 @@ function WorkflowBuilderContent() {
                                 <Select value={currentStep.dependencyType} onValueChange={v => setCurrentStep({ ...currentStep, dependencyType: v as any })}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="NONE">NONE (Start)</SelectItem>
                                         <SelectItem value="ALL">ALL (Mandatory)</SelectItem>
+                                        <SelectItem value="NONE">NONE (Start)</SelectItem>
                                         <SelectItem value="ANY">ANY (Optional)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -1057,24 +1188,19 @@ function WorkflowBuilderContent() {
                                 <SelectTrigger><SelectValue placeholder="Add dependency..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select a step...</SelectItem>
-                                    {workflowSteps?.filter(s => s.key !== currentStep.key).map(s => (
-                                        <SelectItem key={s.key} value={s.key}>{s.name} ({s.key})</SelectItem>
+                                    {workflowSteps?.filter(s =>
+                                        s.id !== currentStep.id &&
+                                        s.formId === currentStep.formId &&
+                                        s.targetAudience === currentStep.targetAudience &&
+                                        s.isExitStep === currentStep.isExitStep
+                                    ).map(s => (
+                                        <SelectItem key={s.id} value={s.key}>{s.name} ({s.key})</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Form Link</Label>
-                                <Select value={currentStep.formId?.toString() || "0"} onValueChange={v => setCurrentStep({ ...currentStep, formId: Number(v) })}>
-                                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="0">None</SelectItem>
-                                        {forms?.map(f => <SelectItem key={f.form_id} value={f.form_id.toString()}>{f.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
                             <div className="space-y-2">
                                 <Label>Display Order</Label>
                                 <Input
@@ -1083,8 +1209,6 @@ function WorkflowBuilderContent() {
                                     onChange={e => setCurrentStep({ ...currentStep, displayOrder: Number(e.target.value) })}
                                 />
                             </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Target Audience</Label>
                                 <Select value={currentStep.targetAudience} onValueChange={v => setCurrentStep({ ...currentStep, targetAudience: v as any })}>

@@ -12,6 +12,7 @@ import { useAuth, UserRole } from '@/auth/context';
 import { MOCK_JOURNALISTS } from '@/data/mock';
 import {
     useApproveWorkflowStepMutation,
+    useActivateExitWorkflowMutation,
     Equipment as EquipmentType,
     useUpdateEquipmentStatusMutation,
     getFileUrl,
@@ -41,6 +42,8 @@ export function JournalistProfile() {
     const [approveWorkflow, { isLoading: isStatusUpdating }] = useApproveWorkflowStepMutation();
     // Equipment status mutation
     const [updateEquipmentStatus, { isLoading: isEquipmentUpdating }] = useUpdateEquipmentStatusMutation();
+    // Exit Workflow mutation
+    const [activateExit, { isLoading: isActivatingExit }] = useActivateExitWorkflowMutation();
 
     // Fetch dynamic form templates
     const { data: templates, isLoading: templatesLoading } = useGetFormFieldTemplatesQuery();
@@ -93,22 +96,33 @@ export function JournalistProfile() {
 
     const countryName = (code: string) => code ? (en[code as keyof typeof en] || code) : 'Unknown';
 
-    const handleDecision = async (status: 'APPROVED' | 'REJECTED') => {
+    const handleDecision = async (status: 'APPROVED' | 'REJECTED' | 'PENDING') => {
         if (!application) return;
 
         // Ensure we have a workflow key
         const stepKey = user?.workflowStepKey;
         console.log('User Workflow Key:', stepKey);
 
-        // Use user's key if available, otherwise fallback to the relevant step we found, then 'super_admin'
-        const effectiveStepKey = stepKey || (relevantStep as any)?.key || 'super_admin';
+        // Use user's key if available, otherwise find the step ID in their authorized list
+        let effectiveStepKey = user?.workflowStepKey;
+
+        // If no direct key, check authorized IDs against available approvals
+        if (!effectiveStepKey && userActionableApproval) {
+            effectiveStepKey = userActionableApproval.workflowStep?.key || userActionableApproval.approvalWorkflowStep?.key;
+        }
+
+        // Fallback for super admin
+        if (!effectiveStepKey && isSuperAdmin) {
+            effectiveStepKey = 'super_admin';
+        }
+
         console.log('Effective Step Key:', effectiveStepKey);
 
         try {
             await approveWorkflow({
                 applicationId: Number(application.id),
                 stepKey: effectiveStepKey,
-                status,
+                status: status as any,
                 notes
             }).unwrap();
 
@@ -132,6 +146,18 @@ export function JournalistProfile() {
             setNotes('');
         } catch (err: any) {
             toast.error(err?.data?.message || `Failed to ${status.toLowerCase()} application`);
+        }
+    };
+
+    const handleActivateExit = async () => {
+        if (!application) return;
+        try {
+            await activateExit(Number(application.id)).unwrap();
+            toast.success("Exit workflow activated successfully");
+            // Reload or refresh data
+            navigate(0); // Simple reload to refresh the profile with new steps
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to activate exit workflow");
         }
     };
 
@@ -218,35 +244,28 @@ export function JournalistProfile() {
 
     const organization = "News Org"; // Placeholder or from API if avail
 
-    // Authorization
-    const canApprove = user?.role === UserRole.SUPER_ADMIN || !!user?.workflowStepKey;
-    const isCustoms = user?.role === UserRole.CUSTOMS_OFFICER;
-    const canUpdateEquipment = checkPermission('verification:equipment:single:update');
-
     // Role Match Logic
     const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN || user?.roleName === 'SUPER_ADMIN';
     const approvals = application.applicationApprovals || application.approvals || [];
 
-    // Find the relevant step for the current user
-    const currentStepApproval = approvals.find((a: any) => {
-        const step = a.workflowStep || a.approvalWorkflowStep;
-        if (!step) return false;
+    const isCustoms = user?.role === UserRole.CUSTOMS_OFFICER;
+    const canUpdateEquipment = checkPermission('verification:equipment:single:update');
 
-        // Match by user's specific workflow key
-        if (user?.workflowStepKey && step.key === user.workflowStepKey) return true;
-
-        // Or match by required role
-        if (step.requiredRole && (step.requiredRole === user?.role || step.requiredRole === user?.roleName)) return true;
-
-        return false;
+    // Find the relevant approval record for the current user based on authorized IDs
+    const userActionableApproval = approvals.find((a: any) => {
+        const stepId = a.workflowStepId || a.approvalWorkflowStepId;
+        return user?.authorizedWorkflowStepIds?.includes(stepId);
     });
 
-    const relevantStep = currentStepApproval?.workflowStep || currentStepApproval?.approvalWorkflowStep;
-    const requiredRole = relevantStep?.requiredRole;
+    // Determine current user's approval status for this application
+    const isStepApproved = userActionableApproval?.status === 'APPROVED';
 
-    // Authorization logic
-    // Disable if strictly a role mismatch and NOT a super admin
-    const isRoleMismatch = !isSuperAdmin && !!requiredRole && (user?.role !== requiredRole && user?.roleName !== requiredRole);
+    // Authorization
+    const canApprove = isSuperAdmin || !!userActionableApproval;
+
+    // Legacy support for relevantStep used in rendering
+    const relevantStep = userActionableApproval?.workflowStep || userActionableApproval?.approvalWorkflowStep;
+
 
     return (
         <div className="space-y-6">
@@ -503,40 +522,65 @@ export function JournalistProfile() {
                                         className="min-h-[100px] text-sm"
                                     />
                                 </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        className="flex-1 bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
-                                        onClick={() => handleDecision('APPROVED')}
-                                        disabled={
-                                            isStatusUpdating ||
-                                            currentStepApproval?.status === 'APPROVED' ||
-                                            !!isRoleMismatch ||
-                                            (!isSuperAdmin && !currentStepApproval)
-                                        }
-                                    >
-                                        {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                                        {currentStepApproval?.status === 'APPROVED' ? 'Approved' : 'Approve'}
-                                    </Button>
+                                {isStepApproved ? (
                                     <Button
                                         variant="outline"
-                                        className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold shadow-sm"
-                                        onClick={() => handleDecision('REJECTED')}
-                                        disabled={
-                                            isStatusUpdating ||
-                                            currentStepApproval?.status === 'APPROVED' ||
-                                            !!isRoleMismatch ||
-                                            (!isSuperAdmin && !currentStepApproval)
-                                        }
+                                        className="w-full bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 font-bold shadow-sm"
+                                        onClick={() => handleDecision('PENDING')}
+                                        disabled={isStatusUpdating}
                                     >
-                                        <X className="h-4 w-4 mr-2" /> Reject
+                                        <X className="h-4 w-4 mr-2" /> Revoke Approval
                                     </Button>
-                                </div>
+                                ) : (
+                                    <div className="flex gap-2 w-full">
+                                        <Button
+                                            className="flex-1 bg-[#009b4d] hover:bg-[#007a3d] font-bold shadow-md"
+                                            onClick={() => handleDecision('APPROVED')}
+                                            disabled={
+                                                isStatusUpdating ||
+                                                (!isSuperAdmin && !canApprove)
+                                            }
+                                        >
+                                            {isStatusUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                            Approve
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold shadow-sm"
+                                            onClick={() => handleDecision('REJECTED')}
+                                            disabled={
+                                                isStatusUpdating ||
+                                                (!isSuperAdmin && !canApprove)
+                                            }
+                                        >
+                                            <X className="h-4 w-4 mr-2" /> Reject
+                                        </Button>
+                                    </div>
+                                )}
                                 {(user?.workflowStepKey || relevantStep?.key) && (
                                     <p className="text-[10px] text-center text-gray-500">
                                         Acting as: <span className="font-bold uppercase">{user?.workflowStepKey || relevantStep?.key}</span>
                                     </p>
                                 )}
                             </div>
+
+                            {/* Exit Workflow Activation Button */}
+                            {application.status === 'APPROVED' && !approvals.some((a: any) => (a.workflowStep || a.approvalWorkflowStep)?.isExitStep) && (
+                                <div className="pt-4 border-t">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 font-bold gap-2"
+                                        onClick={handleActivateExit}
+                                        disabled={isActivatingExit}
+                                    >
+                                        {isActivatingExit ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                                        Initialize Exit Clearance
+                                    </Button>
+                                    <p className="text-[10px] text-center text-gray-400 mt-2">
+                                        Click when the journalist is ready to begin the exit approval process.
+                                    </p>
+                                </div>
+                            )}
                             {/* )} */}
 
                             {isCustoms && (

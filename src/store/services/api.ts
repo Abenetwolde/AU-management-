@@ -1131,6 +1131,13 @@ export const api = createApi({
             }),
             invalidatesTags: ['Application'],
         }),
+        activateExitWorkflow: builder.mutation<void, number>({
+            query: (id) => ({
+                url: `/applications/${id}/activate-exit-workflow`,
+                method: 'POST',
+            }),
+            invalidatesTags: (_result, _error, id) => [{ type: 'Application', id }],
+        }),
         getApprovedApplications: builder.query<ApplicationsResponse['data'], { page?: number; limit?: number } | void>({
             query: (params) => {
                 const page = params && 'page' in params ? params.page : 1;
@@ -1590,6 +1597,7 @@ export const {
     useDeleteEmbassyMutation,
     useUpdateApplicationStatusMutation,
     useApproveWorkflowStepMutation,
+    useActivateExitWorkflowMutation,
     useGetApprovedApplicationsQuery,
     useGetWorkflowApplicationsQuery,
     useGetOrganizationsQuery,
