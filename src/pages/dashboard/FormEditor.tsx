@@ -517,7 +517,91 @@ export function FormEditor() {
                                 <Input value={selectedField.fieldName} onChange={(e) => updateField(selectedField.id, { fieldName: e.target.value })} className={cn(isKeyDuplicate && "border-red-500")} />
                             </div>
 
+                            {existingForm && existingForm.categories && existingForm.categories.length > 0 && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-600 uppercase">Category</label>
+                                    <Select
+                                        value={selectedField.categoryId?.toString() || "uncategorized"}
+                                        onValueChange={(val) => {
+                                            if (val === "uncategorized") {
+                                                updateField(selectedField.id, { categoryId: undefined, categoryName: undefined });
+                                            } else {
+                                                const cat = existingForm.categories.find((c: any) => c.category_id.toString() === val);
+                                                if (cat) {
+                                                    updateField(selectedField.id, { categoryId: cat.category_id, categoryName: cat.name });
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select Category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                                            {existingForm.categories.map((cat: any) => (
+                                                <SelectItem key={cat.category_id} value={cat.category_id.toString()}>
+                                                    {cat.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
                             <Separator className="my-4" />
+
+                            {['checkbox', 'radio', 'dropdown'].includes(selectedField.type) && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-gray-600 uppercase">Options</Label>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 text-xs"
+                                            onClick={() => {
+                                                const currentOptions = selectedField.options || [];
+                                                updateField(selectedField.id, {
+                                                    options: [...currentOptions, `Option ${currentOptions.length + 1}`]
+                                                });
+                                            }}
+                                        >
+                                            + Add Option
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {(selectedField.options || []).map((option, idx) => (
+                                            <div key={idx} className="flex gap-2 items-center">
+                                                <div className="grid place-items-center h-8 w-8 bg-gray-100 rounded text-gray-500 text-xs font-mono">
+                                                    {idx + 1}
+                                                </div>
+                                                <Input
+                                                    value={option}
+                                                    onChange={(e) => {
+                                                        const newOptions = [...(selectedField.options || [])];
+                                                        newOptions[idx] = e.target.value;
+                                                        updateField(selectedField.id, { options: newOptions });
+                                                    }}
+                                                    className="h-8 text-xs"
+                                                    placeholder={`Option ${idx + 1}`}
+                                                />
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    onClick={() => {
+                                                        const newOptions = (selectedField.options || []).filter((_, i) => i !== idx);
+                                                        updateField(selectedField.id, { options: newOptions });
+                                                    }}
+                                                    disabled={(selectedField.options?.length || 0) <= 1}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Separator className="my-4" />
+                                </div>
+                            )}
 
                             <div className="space-y-4">
                                 <CardTitle className="text-xs font-bold uppercase text-gray-400">Validation</CardTitle>
