@@ -140,9 +140,9 @@ export function BadgeManagement() {
                                 />
                             </div>
                         </div>
-                        <Button variant="outline" className="h-11 px-6 gap-2 bg-gray-50 border-gray-200 text-gray-700 font-bold">
+                        {/* <Button variant="outline" className="h-11 px-6 gap-2 bg-gray-50 border-gray-200 text-gray-700 font-bold">
                             Filter <Filter className="h-4 w-4" />
-                        </Button>
+                        </Button> */}
                     </div>
                 </CardContent>
             </Card>
