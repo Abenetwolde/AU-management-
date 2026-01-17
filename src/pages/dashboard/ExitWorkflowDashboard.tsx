@@ -138,10 +138,11 @@ export function ExitWorkflowDashboard() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">All Statuses</SelectItem>
-                                <SelectItem value="SUBMITTED">Submitted</SelectItem>
+                                <SelectItem value="PENDING">Pending</SelectItem>
                                 <SelectItem value="IN_REVIEW">In Review</SelectItem>
                                 <SelectItem value="APPROVED">Approved</SelectItem>
                                 <SelectItem value="REJECTED">Rejected</SelectItem>
+                                <SelectItem value="EXITED">Exited</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button
