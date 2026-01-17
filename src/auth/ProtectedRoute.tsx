@@ -21,5 +21,9 @@ export function ProtectedRoute({ allowedRoles, requiredPermission }: ProtectedRo
         return <Navigate to="/" replace />; // Or a specific 403 page
     }
 
+    if (user?.requirePasswordChange) {
+        return <Navigate to="/change-password" replace />;
+    }
+
     return <Outlet />;
 }

@@ -39,11 +39,12 @@ interface User {
     organization?: Organization;
     permissions?: Permission[]; // For storing API permissions
     authorizedWorkflowSteps?: { id: number; formId: number; key: string; targetAudience: string }[]; // Full step details for authorization
+    requirePasswordChange?: boolean;
 }
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string, organization?: Organization, authorizedWorkflowSteps?: any[]) => void;
+    login: (email: string, role: UserRole, permissions?: Permission[], fullName?: string, roleName?: string, id?: string, workflowStepKey?: string, organization?: Organization, authorizedWorkflowSteps?: any[], requirePasswordChange?: boolean) => void;
     logout: () => void;
     isAuthenticated: boolean;
     checkPermission: (permissionKey: string) => boolean;
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return user.permissions.some(p => p.key === permissionKey);
     };
 
-    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string, organization?: Organization, authorizedWorkflowSteps: any[] = []) => {
+    const login = (email: string, role: UserRole, permissions: Permission[] = [], fullName: string = 'Officer Sara Kamil', roleName?: string, id: string = '1234-AU', workflowStepKey?: string, organization?: Organization, authorizedWorkflowSteps: any[] = [], requirePasswordChange: boolean = false) => {
         // Use provided name/permissions if available (from API), otherwise default
         const newUser: User = {
             id,
@@ -82,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             organization,
             // gate: 'GATE 1',
             permissions,
-            authorizedWorkflowSteps
+            authorizedWorkflowSteps,
+            requirePasswordChange
         };
         setUser(newUser);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));

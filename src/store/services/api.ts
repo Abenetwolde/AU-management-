@@ -1,7 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 // Hardcoded token as requested by the user
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBhdXNtYy5vcmciLCJyb2xlSWQiOjQsInJvbGVOYW1lIjoiU1VQRVJfQURNSU4iLCJpYXQiOjE3NjY1OTIxNTIsImV4cCI6MTc2NjY3ODU1Mn0.6xht6C_HifW8uKqa6gkJ44jQvKOTTGJPFNFJnJ3ipKk";
 
 export enum ApplicationStatus {
     SUBMITTED = 'SUBMITTED',
@@ -524,6 +523,7 @@ export interface LoginResponse {
             workflowStepKey?: string;
         };
         token: string;
+        requirePasswordChange?: boolean;
     };
 }
 
@@ -893,8 +893,7 @@ export const api = createApi({
             const dynamicToken = localStorage.getItem('managment_token');
             if (dynamicToken) {
                 headers.set('authorization', `Bearer ${dynamicToken}`);
-            } else {
-                headers.set('authorization', `Bearer ${TOKEN}`);
+
             }
             return headers;
         },
@@ -906,6 +905,13 @@ export const api = createApi({
                 url: '/auth/login',
                 method: 'POST',
                 body: credentials,
+            }),
+        }),
+        changePassword: builder.mutation<any, any>({
+            query: (data) => ({
+                url: '/auth/change-password',
+                method: 'POST',
+                body: data,
             }),
         }),
         getRoles: builder.query<Role[], void>({
@@ -1775,4 +1781,5 @@ export const {
     useCreateIntegrationMutation,
     useUpdateIntegrationMutation,
     useDeleteIntegrationMutation,
+    useChangePasswordMutation,
 } = api;

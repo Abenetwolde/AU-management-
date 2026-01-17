@@ -23,7 +23,7 @@ export function Login() {
             const response = await apiLogin({ email, password }).unwrap();
 
             if (response.success && response.data) {
-                const { token, user } = response.data;
+                const { token, user, requirePasswordChange } = response.data;
                 // Store token in localStorage for API calls
                 localStorage.setItem('managment_token', token);
 
@@ -43,7 +43,7 @@ export function Login() {
 
                 // Call context login to set state
                 const apiUser = user as any;
-                login(apiUser.email, roleEnum, apiUser.permissions, apiUser.fullName, apiUser.roleName, String(apiUser.id), apiUser.workflowStepKey, apiUser.organization, apiUser.authorizedWorkflowSteps);
+                login(apiUser.email, roleEnum, apiUser.permissions, apiUser.fullName, apiUser.roleName, String(apiUser.id), apiUser.workflowStepKey, apiUser.organization, apiUser.authorizedWorkflowSteps, requirePasswordChange);
 
                 // Always navigate to the unified dashboard
                 navigate('/dashboard/admin');

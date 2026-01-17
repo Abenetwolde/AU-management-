@@ -4,6 +4,7 @@ import { store } from './store';
 import { AuthProvider, UserRole } from './auth/context';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Login } from './pages/auth/Login';
+import { ChangePassword } from './pages/auth/ChangePassword';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { JournalistList } from './pages/dashboard/JournalistList';
 import { AccreditedJournalists } from './pages/dashboard/AccreditedJournalists';
@@ -46,6 +47,7 @@ function App() {
                         <Toaster position="top-right" richColors />
                         <Routes>
                             <Route path="/login" element={<Login />} />
+                            <Route path="/change-password" element={<ChangePassword />} />
                             <Route path="/badge-profile/:hash" element={<PublicProfile />} />
                             <Route path="/verification/:id" element={<JournalistVerification />} />
 
@@ -80,6 +82,7 @@ function App() {
                                     <Route element={<ProtectedRoute requiredPermission="user:view:all" />}>
                                         <Route path="users" element={<UserManagement />} />
                                     </Route>
+
 
                                     <Route element={<ProtectedRoute requiredPermission="organization:view:all" />}>
                                         <Route path="organizations" element={<OrganizationManagement />} />

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/auth/context';
 import { cn } from '@/lib/utils';
+
 import {
   LogOut,
   User,
@@ -47,31 +48,35 @@ export function DashboardLayout() {
   const basePath = '/dashboard';
 
   const getFallbackLogo = () => {
-    if (user?.role === UserRole.ICS_OFFICER) return icsLogo;
-    if (user?.role === UserRole.NISS_OFFICER) return nissLogo;
-    if (user?.role === UserRole.INSA_OFFICER) return insaLogo;
-    if (user?.role === UserRole.CUSTOMS_OFFICER) return customsLogo;
-    if (user?.role === UserRole.AU_ADMIN) return auLogo;
+    const role = user?.role;
+    if (role === UserRole.ICS_OFFICER) return icsLogo;
+    if (role === UserRole.NISS_OFFICER) return nissLogo;
+    if (role === UserRole.INSA_OFFICER) return insaLogo;
+    if (role === UserRole.CUSTOMS_OFFICER) return customsLogo;
+    if (role === UserRole.AU_ADMIN) return auLogo;
     return emmpaLogo;
   };
 
-  // Used in mobile header and sidebar (fallback when no organization name)
-  const getTitle = () => {
+  const getDisplayTitle = () => {
     return user?.organization?.name || 'SUPERADMIN';
   };
 
+  const logoSrc = user?.organization?.logo
+    ? getFileUrl(user.organization.logo)
+    : getFallbackLogo();
+
   return (
     <div className="flex min-h-screen bg-gray-50/50">
-      {/* Mobile Header */}
+      {/* ─── Mobile Header ──────────────────────────────────────── */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
         <div className="flex items-center gap-3">
           <img
-            src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getFallbackLogo()}
-            alt="Logo"
+            src={logoSrc}
+            alt="Organization Logo"
             className="h-8 w-auto object-contain"
           />
           <h1 className="text-sm font-bold font-sans text-primary truncate max-w-[180px]">
-            {getTitle()}
+            {getDisplayTitle()}
           </h1>
         </div>
 
@@ -96,7 +101,7 @@ export function DashboardLayout() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* ─── Sidebar ────────────────────────────────────────────── */}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-[70] w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 shadow-2xl md:shadow-none',
@@ -104,7 +109,7 @@ export function DashboardLayout() {
         )}
       >
         <div className="p-6 relative border-b border-gray-50">
-          {/* Close button – visible only on mobile */}
+          {/* Close button – mobile only */}
           <Button
             variant="ghost"
             size="icon"
@@ -116,7 +121,7 @@ export function DashboardLayout() {
 
           <div className="flex flex-col items-center gap-4 text-primary w-full text-center mt-2">
             <img
-              src={user?.organization?.logo ? getFileUrl(user.organization.logo) : getFallbackLogo()}
+              src={logoSrc}
               alt="Organization Logo"
               className="h-20 w-auto object-contain transition-all hover:scale-105 duration-300"
             />
@@ -138,7 +143,7 @@ export function DashboardLayout() {
         <div className="border-b border-primary mx-4 mb-2" />
 
         <ScrollArea className="flex-1 px-4">
-          <nav className="space-y-2 pr-2">
+          <nav className="space-y-1.5 pr-2">
             {/* Dashboard */}
             {user?.role && (
               <NavLink
@@ -248,7 +253,7 @@ export function DashboardLayout() {
               </NavLink>
             )}
 
-            {/* Permissions */}
+            {/* Permissions Matrix */}
             {checkPermission('permission:matrix:view') && (
               <NavLink
                 to={`${basePath}/permissions`}
@@ -356,109 +361,23 @@ export function DashboardLayout() {
               </NavLink>
             )}
 
-            {/* Email Templates */}
-            {user?.role === UserRole.SUPER_ADMIN && (
-              <NavLink
-                to={`${basePath}/email-templates`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-[#e6f4ea] text-primary'
-                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
-                  )
-                }
-              >
-                <Mail className="h-5 w-5" />
-                Email Templates
-              </NavLink>
-            )}
-
-            {/* Badge Center */}
-            {user?.role === UserRole.SUPER_ADMIN && (
-              <NavLink
-                to={`${basePath}/badge-center`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-[#e6f4ea] text-primary'
-                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
-                  )
-                }
-              >
-                <LayoutDashboard className="h-5 w-5" />
-                Badge Center
-              </NavLink>
-            )}
-
-            {/* Invitation Center */}
-            {checkPermission('application:view:approved') && (
-              <NavLink
-                to={`${basePath}/invitations`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-[#e6f4ea] text-primary'
-                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
-                  )
-                }
-              >
-                <Mail className="h-5 w-5" />
-                Invitation Center
-              </NavLink>
-            )}
-
-            {/* System Settings */}
-            {user?.role === UserRole.SUPER_ADMIN && (
-              <NavLink
-                to={`${basePath}/settings`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-[#e6f4ea] text-primary'
-                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
-                  )
-                }
-              >
-                <Settings className="h-5 w-5" />
-                System Settings
-              </NavLink>
-            )}
-
-            {/* API Management */}
-            {user?.role === UserRole.SUPER_ADMIN && (
-              <NavLink
-                to={`${basePath}/api-management`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-[#e6f4ea] text-primary'
-                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
-                  )
-                }
-              >
-                <Activity className="h-5 w-5" />
-                API Management
-              </NavLink>
-            )}
+            {/* Invitation Center – visible to more roles */}
           </nav>
         </ScrollArea>
 
         {/* User info & logout */}
-        <div className="p-6 mt-auto">
+        <div className="p-6 mt-auto border-t border-gray-100">
           <div className="mb-6">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
                 <User className="h-6 w-6" />
               </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500 truncate max-w-[150px]">{user?.email}</p>
-                <p className="text-xs text-gray-400">ID: #{user?.id}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 truncate">
+                  {user?.name || 'User'}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <p className="text-xs text-gray-400">ID: #{user?.id || '—'}</p>
               </div>
             </div>
           </div>
@@ -487,7 +406,7 @@ export function DashboardLayout() {
           </div>
         </div>
 
-        <footer className="mt-auto pt-12 pb-6 text-center text-xs text-gray-400 font-medium tracking-wide">
+        <footer className="mt-auto pt-10 pb-6 text-center text-xs text-gray-400 font-medium tracking-wide">
           © 2025 African Union Accreditation Portal. All rights reserved.
         </footer>
       </main>
