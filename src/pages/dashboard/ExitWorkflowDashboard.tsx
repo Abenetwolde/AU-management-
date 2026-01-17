@@ -29,7 +29,7 @@ export function ExitWorkflowDashboard() {
     const { user, checkPermission } = useAuth();
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [statusFilter, setStatusFilter] = useState<string>('PENDING');
     const limit = 10;
 
     // Check if user has permission to manage exit workflow (approve/reject/initialize)
@@ -39,7 +39,7 @@ export function ExitWorkflowDashboard() {
         page,
         limit,
         search,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined
+        status: statusFilter !== 'PENDING' ? statusFilter : undefined
     });
 
     const [initializeExit, { isLoading: isInitializing }] = useInitializeExitWorkflowMutation();
@@ -147,7 +147,6 @@ export function ExitWorkflowDashboard() {
                                 <SelectValue placeholder="All Statuses" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ALL">All Applications</SelectItem>
                                 <SelectItem value="PENDING">Pending </SelectItem>
                                 <SelectItem value="IN_REVIEW">In Review </SelectItem>
                                 <SelectItem value="APPROVED">Approved </SelectItem>

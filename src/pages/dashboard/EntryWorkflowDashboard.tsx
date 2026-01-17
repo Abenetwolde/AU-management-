@@ -29,7 +29,7 @@ export function EntryWorkflowDashboard() {
     const { user, checkPermission } = useAuth();
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [statusFilter, setStatusFilter] = useState<string>('PENDING');
     const limit = 10;
 
     // Check if user has permission to approve/reject in entry workflow
@@ -39,7 +39,7 @@ export function EntryWorkflowDashboard() {
         page,
         limit,
         search,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined
+        status: statusFilter !== 'PENDING' ? statusFilter : undefined
     });
 
     useEffect(() => {
@@ -131,7 +131,6 @@ export function EntryWorkflowDashboard() {
                                 <SelectValue placeholder="All Statuses" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ALL">All Applications</SelectItem>
                                 <SelectItem value="PENDING">Pending </SelectItem>
                                 <SelectItem value="IN_REVIEW">In Review </SelectItem>
                                 <SelectItem value="APPROVED">Approved </SelectItem>
