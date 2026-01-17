@@ -1,7 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 // Hardcoded token as requested by the user
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBhdXNtYy5vcmciLCJyb2xlSWQiOjQsInJvbGVOYW1lIjoiU1VQRVJfQURNSU4iLCJpYXQiOjE3NjY1OTIxNTIsImV4cCI6MTc2NjY3ODU1Mn0.6xht6C_HifW8uKqa6gkJ44jQvKOTTGJPFNFJnJ3ipKk";
 
 export enum ApplicationStatus {
     SUBMITTED = 'SUBMITTED',
@@ -504,6 +503,7 @@ export interface LoginResponse {
             workflowStepKey?: string;
         };
         token: string;
+        requirePasswordChange?: boolean;
     };
 }
 
@@ -715,7 +715,7 @@ export interface UpdateEquipmentStatusPayload {
 }
 
 // export const FILE_BASE_URL = 'https://cw761gt5-3000.uks1.devtunnels.ms';
-export const FILE_BASE_URL = 'http://localhost:5000';
+export const FILE_BASE_URL = 'http://172.20.136.19:5000';
 // Super Admin Dashboard Types
 export interface SuperAdminMetric {
     value: number;
@@ -869,27 +869,30 @@ export const api = createApi({
     reducerPath: 'api',
     baseQuery: fetchBaseQuery({
         baseUrl: `${FILE_BASE_URL}/api/v1`,
-    prepareHeaders: (headers) => {
-        const dynamicToken = localStorage.getItem('managment_token');
-        if (dynamicToken) {
-            headers.set('authorization', `Bearer ${dynamicToken}`);
-        } else {
-            headers.set('authorization', `Bearer ${TOKEN}`);
-        }
-        return headers;
-    },
+        prepareHeaders: (headers) => {
+            const dynamicToken = localStorage.getItem('managment_token');
+            if (dynamicToken) {
+                headers.set('authorization', `Bearer ${dynamicToken}`);
+            }
+            return headers;
+        },
     }),
-<<<<<<< HEAD
+
     tagTypes: ['Role', 'Permission', 'Application', 'Form', 'User', 'Category', 'WorkflowStep', 'Invitation', 'Badge', 'EquipCatalog', 'Integration', 'APIProvider', 'Embassy', 'Country', 'Organization', 'EmailTemplate', 'LandingPage', 'Workflow'],
-=======
-tagTypes: ['Role', 'Permission', 'Category', 'Application', 'Organization', 'User', 'EmailTemplate', 'LandingPage', 'Workflow', 'Badge', 'Invitation'],
->>>>>>> 132371bf (minor change)
+
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, any>({
             query: (credentials: any) => ({
                 url: '/auth/login',
                 method: 'POST',
                 body: credentials,
+            }),
+        }),
+        changePassword: builder.mutation<any, any>({
+            query: (data) => ({
+                url: '/auth/change-password',
+                method: 'POST',
+                body: data,
             }),
         }),
         getRoles: builder.query<Role[], void>({
@@ -1684,4 +1687,5 @@ export const {
     useCreateIntegrationMutation,
     useUpdateIntegrationMutation,
     useDeleteIntegrationMutation,
+    useChangePasswordMutation,
 } = api;

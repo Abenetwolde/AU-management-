@@ -4,6 +4,7 @@ import { store } from './store';
 import { AuthProvider, UserRole } from './auth/context';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Login } from './pages/auth/Login';
+import { ChangePassword } from './pages/auth/ChangePassword';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { JournalistList } from './pages/dashboard/JournalistList';
 import { AccreditedJournalists } from './pages/dashboard/AccreditedJournalists';
@@ -44,6 +45,7 @@ function App() {
                         <Toaster position="top-right" richColors />
                         <Routes>
                             <Route path="/login" element={<Login />} />
+                            <Route path="/change-password" element={<ChangePassword />} />
                             <Route path="/badge-profile/:hash" element={<PublicProfile />} />
                             <Route path="/verification/:id" element={<JournalistVerification />} />
 
@@ -86,17 +88,6 @@ function App() {
                                         <Route path="forms/builder/:id" element={<FormEditor />} />
                                     </Route>
 
-<<<<<<< HEAD
-                                    <Route path="settings" element={<SystemSettings />} />
-                                    <Route path="organizations" element={<OrganizationManagement />} />
-                                    <Route path="invitations" element={<InvitationCenter />} />
-                                    <Route path="workflow" element={<WorkflowBuilder />} />
-                                    <Route path="permissions" element={<PermissionManagement />} />
-                                    <Route path="roles" element={<RoleManagement />} />
-                                    <Route path="badge-center" element={<BadgeCenter />} />
-                                    <Route path="api-management" element={<ApiManagement />} />
-                                    <Route path="embassies" element={<EmbassyManagement />} />
-=======
                                     <Route element={<ProtectedRoute requiredPermission="organization:view:all" />}>
                                         <Route path="organizations" element={<OrganizationManagement />} />
                                     </Route>
@@ -112,7 +103,10 @@ function App() {
                                     <Route element={<ProtectedRoute requiredPermission="role:view:all" />}>
                                         <Route path="roles" element={<RoleManagement />} />
                                     </Route>
->>>>>>> 3ca927b2 (new update)
+
+                                    {/* Other authorized routes that were missing in permission blocks */}
+                                    <Route path="embassies" element={<EmbassyManagement />} />
+
 
                                     {/* AU Admin Specific */}
                                     <Route element={<ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.AU_ADMIN]} />}>
