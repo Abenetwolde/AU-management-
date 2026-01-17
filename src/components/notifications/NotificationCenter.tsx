@@ -27,13 +27,37 @@ import { cn } from '../../lib/utils';
 const NotificationCenter: React.FC = () => {
     const [page] = useState(1);
     const dispatch = useDispatch();
-    const { data: notificationsData, isLoading } = useGetNotificationsQuery({ page, limit: 15 });
-    const { data: unreadData } = useGetUnreadNotificationCountQuery(); // Polling removed
+
+    // Fetch notifications with refetch capability
+    const { data: notificationsData, isLoading, refetch: refetchNotifications } = useGetNotificationsQuery(
+        { page, limit: 15 },
+        {
+            // Automatically refetch when component mounts or becomes visible
+            refetchOnMountOrArgChange: true,
+            refetchOnFocus: true,
+        }
+    );
+
+    const { data: unreadData, refetch: refetchUnreadCount } = useGetUnreadNotificationCountQuery(
+        undefined,
+        {
+            refetchOnMountOrArgChange: true,
+            refetchOnFocus: true,
+        }
+    );
+
     const [markAsRead] = useMarkNotificationAsReadMutation();
     const [markAllRead] = useMarkAllNotificationsAsReadMutation();
     const navigate = useNavigate();
 
     const unreadCount = unreadData?.unreadCount || 0;
+
+    // Fetch notifications immediately on mount
+    useEffect(() => {
+        console.log('[NotificationCenter] Component mounted, fetching notifications...');
+        refetchNotifications();
+        refetchUnreadCount();
+    }, [refetchNotifications, refetchUnreadCount]);
 
     useEffect(() => {
         let isMounted = true;
@@ -60,6 +84,10 @@ const NotificationCenter: React.FC = () => {
 
                     // Invalidate tags to trigger refetch
                     dispatch(api.util.invalidateTags(['Notification']));
+
+                    // Explicitly refetch to ensure immediate update
+                    refetchNotifications();
+                    refetchUnreadCount();
 
                     // Browser Notification (non-blocking)
                     if (window.Notification && Notification.permission === 'granted') {
